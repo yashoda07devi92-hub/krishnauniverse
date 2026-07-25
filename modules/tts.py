@@ -2,16 +2,9 @@
 Text-to-speech for Krishna Universe.
 
 Strategy:
-  1. Try edge-tts FIRST (free, high quality Hindi neural voices).
+  1. Try edge-tts FIRST (free, high quality, warm USA female voice).
   2. On ANY error - including the HTTP 403 commonly returned to GitHub Actions
-     runners - automatically fall back to gTTS (Hindi).
-
-Voice choice note: the channel this was ported from rotated six voices to avoid
-sounding mass-produced. A katha channel is different -- a returning listener
-expects the same narrator, and that voice IS the brand. So tts.voice_pool here is
-deliberately SMALL (a male katha-vachak lead plus one female voice) and the rate
-varies instead. Enough variation to avoid a single identical synthetic track
-across the library, not so much that the channel loses its voice.
+     runners - automatically fall back to gTTS (American English).
 
 Both engines write the SAME output mp3 path. The engine that was actually used
 is logged. An edge-tts output file that ends up empty is treated as a failure

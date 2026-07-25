@@ -12,7 +12,7 @@ import re
 
 from .config import get_cfg
 
-log = logging.getLogger("krishnakatha.subtitles")
+log = logging.getLogger("krishna.subtitles")
 
 
 def _clean_words(text):

@@ -6,7 +6,7 @@ storyteller voice, builds a 1920x1080 HD video with real stock footage,
 readable captions, an intro title card, soft music and an outro call-to-action,
 then uploads it to YouTube at **US prime time**.
 
-> Separate from the KrishnaUniverse reels/shorts pipeline - this repo has its own
+> Separate from the Krishna Universe reels/shorts pipeline - this repo has its own
 > schedule, config and YouTube upload step, so it does not affect any shorts.
 
 ## How it works
@@ -56,12 +56,12 @@ python upload_youtube.py --authorize   # opens a browser, prints YT_TOKEN_JSON
 ```
 
 > Tip: To keep the YouTube Data API daily quota (10,000 units; ~1600 per
-> upload) comfortable when this shares a channel with the KrishnaUniverse reels,
+> upload) comfortable when this shares a channel with the Krishna Universe reels,
 > 4 reels + 1 long-form = ~8,000 units/day, which stays safely under the cap.
 
 ## Run it manually
 
-GitHub: **Actions -> KrishnaKatha Auto Longform -> Run workflow**
+GitHub: **Actions -> Krishna Universe Auto Longform -> Run workflow**
 - `diagnose_only=true` - just check secrets, make nothing
 - `selftest=true` - build a video but do NOT upload (downloadable as an artifact)
 

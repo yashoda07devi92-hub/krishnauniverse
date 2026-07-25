@@ -57,18 +57,26 @@ _DEFAULT_CONFIG = {
         "clip_cut_seconds": 3.0,
         "background_zoom": 1.08,
     },
+    # These are the LAST-RESORT defaults used only when config.json is missing a
+    # key. They were left over from the cute-pets channel this was ported from,
+    # which meant a single missing key could silently put an English voice, a
+    # pastel palette or a "cute puppy" footage search into a Hindi Krishna reel -
+    # with no error to show why.
     "palette": {
-        "gradient_top": [255, 224, 178],
-        "gradient_bottom": [255, 183, 153],
-        "solid_fallback": [255, 209, 168],
+        "gradient_top": [255, 196, 118],
+        "gradient_bottom": [138, 76, 158],
+        "solid_fallback": [216, 138, 76],
     },
-    "captions": {"enabled": True, "fontsize": 90, "color": "white"},
-    "hook": {"enabled": True, "duration_seconds": 5.0},
-    "tts": {"voice": "en-US-AriaNeural", "rate": "-8%", "pitch": "+0Hz"},
+    "captions": {"enabled": False, "fontsize": 78, "color": "white"},
+    "hook": {"enabled": True, "duration_seconds": 2.5},
+    "tts": {"voice": "hi-IN-MadhurNeural", "rate": "-10%", "pitch": "+0Hz"},
     "gemini": {"model": "gemini-2.0-flash"},
-    "pexels": {"default_keywords": ["cute puppy", "kitten playing"]},
-    "music": {"enabled": True, "volume": 0.13},
-    "youtube": {"category_id": "15", "privacy_status": "public"},
+    "pexels": {"default_keywords": ["river water flowing sunlight",
+                                    "peacock feathers close up",
+                                    "oil lamp diya flame dark"]},
+    "music": {"enabled": True, "volume": 0.16},
+    "youtube": {"category_id": "24", "privacy_status": "public",
+                "default_language": "hi", "default_audio_language": "hi"},
 }
 
 

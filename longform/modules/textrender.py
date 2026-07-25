@@ -1,5 +1,5 @@
 """
-Devanagari-safe text rendering for Krishna Universe.
+Devanagari-safe text rendering for the long-form Krishna Universe pipeline.
 
 WHY THIS MODULE EXISTS
 ----------------------

@@ -36,7 +36,7 @@ from modules import history
 from modules import seo
 from modules import thumbnail as thumb_mod
 
-log = logging.getLogger("krishnakatha.generate")
+log = logging.getLogger("krishna.generate")
 
 MANIFEST_PATH = os.path.join(str(BASE_DIR), "manifest.json")
 
@@ -275,7 +275,7 @@ def run(count=1, lesson=None, topic=None, test=False):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Generate KrishnaKatha long-form videos.")
+    parser = argparse.ArgumentParser(description="Generate Krishna Universe long-form videos.")
     parser.add_argument("--count", type=int, default=1, help="Number of episodes to generate.")
     parser.add_argument("--lesson", type=str, default=None, help="Optional moral/lesson hint.")
     parser.add_argument("--topic", type=str, default=None, help="Optional story topic hint.")

@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-Script generation for Krishna Universe Shorts (Hindi katha).
+Hindi script generation for Krishna Universe Shorts.
 
-Produces a ~30 second Hindi narration about one leela / one lesson from
-Krishna's life, using Gemini. If no API key is set, or every model candidate
-fails, it falls back to the bundled quotes.json of pre-written Hindi scripts.
+Produces a ~30 second Hindi narration about one leela from Krishna's life, the
+seekh (lesson) it teaches, and - new in this channel - a list of ENGLISH scene
+prompts used to generate the visuals.
 
-Two things differ from the English pipeline this was ported from:
+WHY SCENE PROMPTS
+-----------------
+The parent pipeline searched Pexels for footage matching the story. That works
+when the subject is a puppy. There is no stock footage of Krishna anywhere, so
+the visuals have to be generated per scene instead (modules/ai_images.py), and
+the model that generates them needs an explicit visual description of each beat.
+Asking Gemini for those descriptions in the same call keeps the pictures locked
+to the story rather than being generic devotional wallpaper.
 
-  * The narration is Hindi (Devanagari). Word budget is therefore tuned to the
-    Hindi voice, which reads slower than the English one: ~130 words/minute at
-    the configured rate, so ~65 words is 30 seconds.
+The prompts are requested in ENGLISH on purpose: the image model understands
+English prompts far better than Devanagari, while the narration itself stays in
+Hindi.
 
-  * The model is also asked for `scene_prompts` -- English one-line visual
-    descriptions of each beat of the story. There is no stock footage of Krishna
-    anywhere, so those prompts are what modules/ai_images.py turns into the
-    actual frames of the video. Asking the SAME model that wrote the story to
-    describe the shots keeps picture and narration in sync; generic prompts
-    produced frames that had nothing to do with the words being spoken.
-
-Heavy third-party libraries (google-generativeai) are imported lazily inside
-functions so importing this module never hard-fails.
+Falls back to quotes.json (Hindi) if Gemini is unavailable. Heavy imports are
+lazy so importing this module never hard-fails.
 """
 
 import json
@@ -30,125 +30,94 @@ import re
 from dataclasses import dataclass, field, replace
 
 from .config import QUOTES_PATH, get_cfg, get_env
-
-log = logging.getLogger("krishna.gemini")
-
-# All content pools live in modules/pools.py so they can be grown in one place.
-# Selection goes through modules/history.py, which draws WITHOUT replacement and
-# remembers across runs, so nothing repeats until a pool is genuinely exhausted.
 from .pools import (
+    ATMOSPHERE_KEYWORDS,
     CTA_CANDIDATES,
     DEFAULT_KEYWORDS,
-    FLASH_BY_THEME,
-    FLASH_GENERIC,
     FLASH_PHRASES,
     HOOK_CANDIDATES,
-    SCREEN_BY_THEME,
-    SCREEN_GENERIC,
     SCREEN_HOOKS,
     TOPIC_POOL,
 )
 from . import history
 
+log = logging.getLogger("krishna.gemini")
+
 _CTA = CTA_CANDIDATES[0]
+
+# Visual house style. Prepended to every scene prompt so all 150 leelas share a
+# consistent look instead of every upload arriving in a different art style,
+# which is what makes an AI channel feel like a random image dump.
+SCENE_STYLE = (
+    "cinematic indian mythological painting, dramatic warm lighting, rich saffron "
+    "and deep blue palette, highly detailed, volumetric god rays, film grain, "
+    "no text, no watermark, no letters"
+)
+
+# Used when the model returns nothing usable for the visuals.
+FALLBACK_SCENES = [
+    "young lord krishna with peacock feather crown standing under a banyan tree at golden hour",
+    "ancient indian village at dawn, mud houses, cows, soft mist",
+    "yamuna river flowing at sunset, lotus flowers, warm reflections",
+    "flute resting on a stone beside a river, peacock feather, soft light",
+    "night sky full of stars over an ancient indian temple",
+    "hands of a mother holding a small child, warm lamp light, indian village home",
+]
 
 
 def _pick_cta():
     return history.pick("ctas", CTA_CANDIDATES)
 
 
-def _as_list(picked):
+def _pick_screen_hook():
+    return history.pick("screen_hooks", SCREEN_HOOKS)
+
+
+def _pick_flashes(count=3):
+    picked = history.pick("flashes", FLASH_PHRASES, count=count)
     return picked if isinstance(picked, list) else [picked]
 
 
-def _pick_screen_hook(theme=None):
-    """On-screen label for the opening 2.5s, biased toward the story's own theme.
-
-    Half the time it draws from the theme's own labels ("गोवर्धन उठा" on a
-    Govardhan story) and half the time from the safe generic set. Always drawing
-    themed would exhaust the small per-theme lists in a few days; never drawing
-    themed produced bland labels. Each theme keeps its own history bucket so one
-    theme's draws do not consume another's.
-    """
-    themed = SCREEN_BY_THEME.get(theme) or []
-    if themed and random.random() < 0.5:
-        return history.pick("screen_hooks_%s" % theme, list(themed))
-    return history.pick("screen_hooks", list(SCREEN_GENERIC))
-
-
-def _pick_flashes(count=3, theme=None):
-    """Short phrases flashed mid-video (see video_composer._build_flash_clips).
-
-    One themed phrase plus generic ones. A flat random draw across every phrase
-    put proper nouns from the wrong chapter of Krishna's life on screen -- a
-    Govardhan reel flashing a Mathura character's name -- which reads as
-    careless. See the note above FLASH_GENERIC in pools.py.
-    """
-    count = max(1, int(count))
-    out = []
-    themed = FLASH_BY_THEME.get(theme) or []
-    if themed and count > 1:
-        out.extend(_as_list(history.pick("flashes_%s" % theme, list(themed), count=1)))
-    need = count - len(out)
-    if need > 0:
-        out.extend(_as_list(history.pick("flashes", list(FLASH_GENERIC), count=need)))
-    return out[:count]
-
-
-def _split_topic(topic):
-    """TOPIC_POOL holds (premise, lesson) tuples. Accept either shape."""
-    if isinstance(topic, (tuple, list)) and len(topic) >= 2:
-        return str(topic[0]), str(topic[1])
-    return (str(topic) if topic else ""), ""
-
-
 def _has_cta(text):
-    """True if the script already ends with one of our sign-offs."""
-    body = (text or "")
-    return any(c in body for c in CTA_CANDIDATES)
+    low = (text or "")
+    return any(c in low for c in CTA_CANDIDATES)
 
 
 def _derive_hook(text):
-    """Pick a voice-friendly Hindi hook sentence for this reel.
+    """Plain random on purpose, NOT history.pick().
 
-    Plain random on purpose, NOT history.pick(). This runs inside
-    Script.__post_init__, and load_fallback_scripts() builds a Script for every
-    entry in quotes.json on a single reel. Consuming history here would drain the
-    hook, screen-hook and flash pools in one run and force an immediate reset --
-    which is exactly the repetition the history layer exists to prevent. The
-    real, history-backed pick happens once per reel in generate_script().
+    This runs inside Script.__post_init__, and load_fallback_scripts() builds a
+    Script for every entry in quotes.json on a single reel. Consuming history
+    here would drain the hook, screen-hook and flash pools in one run and force
+    an immediate reset - the exact repetition this channel is built to avoid.
+    The real history-backed pick happens once per reel in generate_script().
     """
     return random.choice(HOOK_CANDIDATES)
 
 
 def swap_spoken_hook(text, hook=None):
-    """Replace the FIRST sentence of the script with a fresh spoken hook.
+    """Replace the FIRST sentence of the narration with a fresh Hindi opener.
 
-    The narrator voices `script.text`, and both Gemini and the bundled scripts
-    gravitate to the same handful of openers. Swapping the first sentence means
-    every reel's voiceover starts differently, while the rest of the katha and
-    the closing sign-off are untouched.
-
-    Hindi sentences end in a danda (।) as often as a full stop, so the split has
-    to accept both -- splitting on [.!?] alone left the whole paragraph intact
-    and the hook simply got prepended, producing two openers in a row.
+    Devanagari uses the danda (।) as its full stop, so the sentence split has to
+    accept it alongside western punctuation - splitting on '.' alone would leave
+    the whole paragraph as one sentence and the hook would simply be prepended.
     """
     if not text:
         return text
     chosen = hook or history.pick("hooks", HOOK_CANDIDATES)
-    body = text.strip()
+    body = str(text).strip()
     parts = re.split(r"(?<=[।.!?])\s+", body, maxsplit=1)
     rest = parts[1].strip() if len(parts) == 2 else ""
     if rest:
-        return "%s %s" % (chosen, rest)
-    return "%s %s" % (chosen, body)
+        return f"{chosen} {rest}"
+    return f"{chosen} {body}"
 
 
 def swap_cta(text, cta=None):
     """Replace a known trailing sign-off with a freshly chosen one."""
     if not text:
         return text
-    body = text.strip()
+    body = str(text).strip()
     chosen = cta or _pick_cta()
     for candidate in CTA_CANDIDATES:
         idx = body.rfind(candidate)
@@ -159,35 +128,23 @@ def swap_cta(text, cta=None):
     return body
 
 
-# Fallback visual beats, used when the model returns no scene_prompts. Kept
-# generic so they fit any leela rather than contradicting the narration.
-_GENERIC_SCENES = [
-    "young Lord Krishna with peacock feather crown, serene expression, warm golden light",
-    "ancient Indian village at dawn, mud houses, cows, soft mist",
-    "Yamuna riverbank at sunset, calm water, silhouette of a flute player",
-    "diya oil lamps glowing in a stone temple courtyard at night",
-    "peacock spreading feathers under a banyan tree, dramatic light",
-]
-
-
 @dataclass
 class Script:
-    """A single Hindi narration script ready for the pipeline."""
+    """A single Hindi narration ready for the pipeline."""
 
     title: str
     text: str
     keywords: list = field(default_factory=list)
-    hook: str = ""          # spoken opener (full Hindi sentence, narrated)
-    screen_hook: str = ""   # on-screen label (2-4 Hindi words, drawn ~2.5s)
-    flashes: list = field(default_factory=list)   # phrases flashed mid-video
-    scene_prompts: list = field(default_factory=list)  # English AI-image prompts
-    lesson: str = ""        # the seekh, used in the description + last chapter
+    hook: str = ""            # spoken opener (narrated)
+    screen_hook: str = ""     # on-screen label, 2-4 words
+    flashes: list = field(default_factory=list)
+    seekh: str = ""           # the lesson, reused in the description
+    scene_prompts: list = field(default_factory=list)  # ENGLISH image prompts
 
     def __post_init__(self):
         if not self.hook:
             self.hook = _derive_hook(self.text)
-        # Cheap random placeholders only; generate_script() overwrites these with
-        # history-backed picks for the reel that is actually produced.
+        # Cheap random placeholders only - see the note in _derive_hook.
         if not self.screen_hook:
             self.screen_hook = random.choice(SCREEN_HOOKS)
         if not self.flashes:
@@ -195,7 +152,7 @@ class Script:
         if not self.keywords:
             self.keywords = list(DEFAULT_KEYWORDS)
         if not self.scene_prompts:
-            self.scene_prompts = list(_GENERIC_SCENES)
+            self.scene_prompts = list(FALLBACK_SCENES)
 
     @property
     def word_count(self):
@@ -205,50 +162,50 @@ class Script:
 # --------------------------------------------------------------------------
 # Gemini-backed generation
 # --------------------------------------------------------------------------
-_PROMPT_TEMPLATE = """आप "Krishna Universe" नाम के एक YouTube Shorts चैनल के लिए कथा लिखते हैं।
-चैनल का विषय: भगवान श्रीकृष्ण के जीवन की लीलाएँ और उनसे मिलने वाली सीख।
-दर्शक भारत में हैं, भाषा सरल बोलचाल की हिंदी है।
+_PROMPT_TEMPLATE = """आप "Krishna Universe" नाम के एक हिंदी YouTube Shorts चैनल के लिए
+स्क्रिप्ट लिखते हैं। चैनल का विषय: भगवान श्रीकृष्ण के जीवन की लीलाएँ और उनसे
+मिलने वाली सीख। दर्शक भारत में हैं, आम हिंदी बोलने वाले लोग।
 
-एक कथा लिखिए, लगभग {words} शब्दों की (धीमी आवाज़ में पढ़ने पर करीब 30 सेकंड)।
+इस लीला पर एक narration लिखें:
+  लीला: {premise}
+  सीख:  {lesson}
 
 नियम:
-- पहला वाक्य एक छोटा, ज़ोरदार हुक हो जो स्क्रॉल रोक दे। हर बार अलग तरीका
-  अपनाइए — कभी सवाल, कभी दावा, कभी रहस्य। एक ही शुरुआत दोहराइए नहीं।
-- टोन: शांत, आदरपूर्ण, कथावाचक जैसी। जैसे कोई दादी-नानी बैठकर कथा सुना रही हो।
-- कथा में एक ठोस दृश्य होना चाहिए और अंत में एक साफ़ सीख।
-- सरल हिंदी। भारी संस्कृत शब्द नहीं। छोटे वाक्य।
-- किसी धर्म, जाति या व्यक्ति के बारे में कोई अपमानजनक बात नहीं। कोई राजनीति नहीं।
-- कोई तथ्य गढ़िए नहीं — शास्त्रों में जो प्रसंग है, उसी को सरल भाषा में कहिए।
-- अंत में बिल्कुल यही पंक्ति लिखिए: "{cta}"
-- सिर्फ बोले जाने वाले वाक्य। कोई इमोजी नहीं, कोई हैशटैग नहीं, कोई मार्कडाउन नहीं,
-  कोई स्टेज-डायरेक्शन नहीं।
-{topic_line}{lesson_line}
-सिर्फ एक JSON ऑब्जेक्ट लौटाइए (कोई code fence नहीं), इन keys के साथ:
-  "title": हिंदी में छोटा आकर्षक शीर्षक (अधिकतम 8 शब्द),
-  "text": पूरी कथा एक ही string में (हिंदी),
-  "lesson": इस कथा की सीख एक छोटे हिंदी वाक्य में,
-  "scene_prompts": 5 से 6 items का array. हर item ENGLISH में एक दृश्य का
-      वर्णन हो, जिससे AI चित्र बनाया जाएगा. कथा के क्रम में लिखिए.
-      हर वर्णन में जगह, समय और रोशनी बताइए. उदाहरण:
-      "baby Krishna crawling on a mud floor holding a butter pot, warm lamplight,
-       ancient Indian village hut, cinematic". कोई text/letters न मांगें.
-  "keywords": 3 से 5 items का array, ENGLISH में, माहौल वाले stock-footage
-      search phrases (जैसे "yamuna river flowing water", "peacock feathers",
-      "oil lamp flame"). इनमें कोई इंसान न हो, सिर्फ प्रकृति/वस्तु/जगह.
+- लंबाई लगभग {words} शब्द — बोलने पर करीब 30 सेकंड। इससे ज़्यादा बिल्कुल नहीं।
+- सरल, बोलचाल की हिंदी। कठिन संस्कृत शब्द नहीं। जैसे कोई दादी शांति से कथा
+  सुना रही हो — भावुक, गर्म, अपनापन लिए।
+- पहला वाक्य एक छोटा curiosity hook हो (4 से 9 शब्द), जो स्क्रॉल रोक दे।
+  हर बार अलग तरीके से लिखें।
+- कथा को सीधे उस दृश्य से शुरू करें, भूमिका मत बाँधें। 30 सेकंड में समय नहीं है।
+- अंत में ऊपर दी गई सीख को एक साफ़, छोटी लाइन में कहें — वही इस video का सार है।
+- सबसे आख़िर में बिल्कुल यही वाक्य लिखें: "{cta}"
+- केवल बोले जाने वाले वाक्य। कोई emoji नहीं, कोई hashtag नहीं, कोई markdown नहीं,
+  कोई stage direction नहीं। देवनागरी में लिखें।
+- कोई ऐसा दावा न करें जो शास्त्रों में नहीं है। लीला को वैसे ही रखें जैसे वो
+  प्रचलित है।
+
+सिर्फ़ एक JSON object लौटाएँ (कोई code fence नहीं), इन keys के साथ:
+  "title": हिंदी में छोटा आकर्षक शीर्षक (अधिकतम 9 शब्द),
+  "text": पूरा narration एक string में (हिंदी),
+  "seekh": सीख एक छोटी हिंदी लाइन में,
+  "scene_prompts": {scenes} ENGLISH image-generation prompts का array, कथा के
+      क्रम में। हर prompt एक पूरा दृश्य बताए — कौन है, कहाँ है, क्या हो रहा है,
+      रोशनी कैसी है। उदाहरण: "young krishna lifting a mountain over a village
+      while heavy rain falls, villagers sheltering beneath, dramatic storm light".
+      ये prompts अंग्रेज़ी में ही लिखें, हिंदी में नहीं।
+  "keywords": 3-5 ENGLISH stock-footage search phrases for ATMOSHPERE shots that
+      really exist on video sites — river water, peacock, cows, diya flame,
+      monsoon rain, forest light, temple. Krishna himself must NOT appear in
+      these, they are only background texture.
 """
 
 
-def _build_prompt(topic=None, lesson=None):
+def _build_prompt(premise, lesson):
     target_words = get_cfg("gemini.target_words", 68)
-    topic_line = ""
-    lesson_line = ""
-    if topic:
-        topic_line = "- कथा इस प्रसंग पर हो: %s\n" % topic
-    if lesson:
-        lesson_line = "- कथा की सीख यही होनी चाहिए: %s\n" % lesson
+    scenes = int(get_cfg("ai_images.max_images", 7))
     return _PROMPT_TEMPLATE.format(
-        words=target_words, cta=_pick_cta(),
-        topic_line=topic_line, lesson_line=lesson_line,
+        premise=premise, lesson=lesson, words=target_words,
+        cta=_pick_cta(), scenes=scenes,
     )
 
 
@@ -256,7 +213,7 @@ def _parse_model_json(raw):
     """Extract a JSON object from a model response that may include fences."""
     if not raw:
         return None
-    cleaned = raw.strip()
+    cleaned = str(raw).strip()
     cleaned = re.sub(r"^```(?:json)?", "", cleaned).strip()
     cleaned = re.sub(r"```$", "", cleaned).strip()
     start = cleaned.find("{")
@@ -269,18 +226,27 @@ def _parse_model_json(raw):
         return None
 
 
-def _clean_list(values, limit=8):
+def _clean_scene_prompts(raw_list):
+    """Keep only usable English scene prompts.
+
+    A prompt written in Devanagari is dropped: the image model produces garbled
+    output from Hindi prompts, and a garbled scene is worse than a fallback one.
+    """
     out = []
-    for v in (values or []):
-        s = str(v).strip()
-        if s and s not in out:
-            out.append(s)
-        if len(out) >= limit:
-            break
+    for item in raw_list or []:
+        s = " ".join(str(item).split())
+        if len(s) < 12:
+            continue
+        # Reject anything that is mostly Devanagari.
+        deva = sum(1 for ch in s if "\u0900" <= ch <= "\u097F")
+        if deva > len(s) * 0.2:
+            log.warning("Dropping Devanagari scene prompt: %r", s[:40])
+            continue
+        out.append(s)
     return out
 
 
-def _generate_with_gemini(topic=None, lesson=None):
+def _generate_with_gemini(premise, lesson):
     """Try Gemini across the ordered model candidates. Returns Script or None."""
     api_key = get_env("GEMINI_API_KEY")
     if not api_key:
@@ -306,42 +272,38 @@ def _generate_with_gemini(topic=None, lesson=None):
     )
     ordered = [default_model] + [m for m in candidates if m != default_model]
 
-    prompt = _build_prompt(topic, lesson)
-    temperature = get_cfg("gemini.temperature", 0.9)
-    min_words = int(get_cfg("gemini.min_words", 45))
+    prompt = _build_prompt(premise, lesson)
+    temperature = get_cfg("gemini.temperature", 0.92)
 
     for model_name in ordered:
         try:
-            log.info("Requesting Hindi katha from Gemini model '%s'...", model_name)
+            log.info("Requesting Hindi script from Gemini model '%s'...", model_name)
             model = genai.GenerativeModel(model_name)
             resp = model.generate_content(
                 prompt, generation_config={"temperature": temperature}
             )
-            raw = getattr(resp, "text", None)
-            data = _parse_model_json(raw)
+            data = _parse_model_json(getattr(resp, "text", None))
             if not data or not data.get("text"):
                 log.warning("Model '%s' returned no usable text; trying next.", model_name)
                 continue
 
-            text = str(data["text"]).strip()
-            if len(text.split()) < min_words:
-                log.warning(
-                    "Model '%s' returned only %d words (need >=%d); trying next.",
-                    model_name, len(text.split()), min_words,
-                )
-                continue
+            scenes = _clean_scene_prompts(data.get("scene_prompts"))
+            if not scenes:
+                log.warning("Model '%s' gave no usable scene prompts; using fallbacks.", model_name)
+                scenes = list(FALLBACK_SCENES)
 
             script = Script(
-                title=str(data.get("title") or "कृष्ण कथा").strip(),
-                text=text,
-                keywords=_clean_list(data.get("keywords"), 5),
-                scene_prompts=_clean_list(data.get("scene_prompts"), 8),
-                lesson=str(data.get("lesson") or lesson or "").strip(),
+                title=str(data.get("title") or "श्रीकृष्ण की एक सीख").strip(),
+                text=str(data["text"]).strip(),
+                seekh=str(data.get("seekh") or lesson).strip(),
+                keywords=[str(k).strip() for k in data.get("keywords", []) if str(k).strip()]
+                or random.sample(ATMOSPHERE_KEYWORDS, 5),
+                scene_prompts=scenes,
             )
             if not _has_cta(script.text):
                 script.text = script.text.rstrip() + " " + _pick_cta()
             log.info(
-                "Gemini katha ready via '%s' (%d words, %d scene prompts).",
+                "Gemini script ready via '%s' (%d words, %d scene prompt(s)).",
                 model_name, script.word_count, len(script.scene_prompts),
             )
             return script
@@ -367,11 +329,11 @@ def load_fallback_scripts():
             try:
                 scripts.append(
                     Script(
-                        title=str(item.get("title", "कृष्ण कथा")),
+                        title=str(item.get("title", "श्रीकृष्ण की एक सीख")),
                         text=str(item["text"]),
+                        seekh=str(item.get("seekh", "")),
                         keywords=list(item.get("keywords", [])),
                         scene_prompts=list(item.get("scene_prompts", [])),
-                        lesson=str(item.get("lesson", "")),
                     )
                 )
             except Exception:
@@ -382,19 +344,20 @@ def load_fallback_scripts():
         return []
 
 
-def _fallback_script(topic=None, lesson=None):
+def _fallback_script(premise=None, lesson=None):
     scripts = load_fallback_scripts()
     if not scripts:
         return Script(
-            title="कृष्ण की सीख",
+            title="कान्हा की सबसे बड़ी सीख",
             text=(
-                "एक बात सुनो, जो कृष्ण ने बहुत पहले कह दी थी। "
-                "उन्होंने कहा था, अंधेरे को गाली देने से कुछ नहीं होता, "
-                "एक दीया जला देना ही धर्म है। शिकायत करना आसान है, "
-                "पर एक छोटा अच्छा काम पूरे माहौल को बदल देता है। " + _CTA
+                "कान्हा ने बस एक लाइन में सब समझा दिया। जब अर्जुन ने रणभूमि में "
+                "अपना धनुष रख दिया, तब कान्हा ने कहा — जो तुम्हारे हाथ में है वो "
+                "करो, बाकी मुझ पर छोड़ दो। सीख यही है कि फल की चिंता छोड़कर किया "
+                "गया काम कभी बोझ नहीं बनता। " + _CTA
             ),
+            seekh=lesson or "फल की चिंता छोड़कर किया गया काम कभी बोझ नहीं बनता",
             keywords=list(DEFAULT_KEYWORDS),
-            lesson=lesson or "शिकायत करने से अच्छा है एक दीया जला देना",
+            scene_prompts=list(FALLBACK_SCENES),
         )
     return random.choice(scripts)
 
@@ -402,44 +365,42 @@ def _fallback_script(topic=None, lesson=None):
 # --------------------------------------------------------------------------
 # Public API
 # --------------------------------------------------------------------------
+def _split_topic(topic):
+    """Accept a (leela, seekh) tuple, or a plain string for --topic."""
+    if isinstance(topic, (tuple, list)) and len(topic) >= 2:
+        return str(topic[0]), str(topic[1])
+    return str(topic), ""
+
+
 def generate_script(topic=None):
-    """Return a single Script, preferring Gemini and falling back to quotes."""
-    lesson = None
+    """Return a single Hindi Script, preferring Gemini and falling back."""
     if not topic:
         topic = history.pick("topics", TOPIC_POOL)
         log.info(
             "Auto-picked leela: %s  (%d of %d unused)",
-            topic, len(history.remaining("topics", TOPIC_POOL)), len(TOPIC_POOL),
+            topic[0] if isinstance(topic, (tuple, list)) else topic,
+            len(history.remaining("topics", TOPIC_POOL)), len(TOPIC_POOL),
         )
-    topic, lesson = _split_topic(topic)
+    premise, lesson = _split_topic(topic)
 
-    script = _generate_with_gemini(topic, lesson)
+    script = _generate_with_gemini(premise, lesson)
     if script is None:
-        script = _fallback_script(topic, lesson)
+        script = _fallback_script(premise, lesson)
         log.info("Using fallback script: '%s'.", script.title)
 
     fresh_hook = history.pick("hooks", HOOK_CANDIDATES)
     script.text = swap_spoken_hook(script.text, fresh_hook)
     script.text = swap_cta(script.text)
     script.hook = fresh_hook
-    if not script.lesson and lesson:
-        script.lesson = lesson
-
-    # On-screen text is chosen AFTER the story exists, so it can be matched to
-    # which part of Krishna's life this actually is. Imported here rather than at
-    # module level: seo imports history and pools, and importing it at the top
-    # would make the script/SEO layers circular.
-    from . import seo
-
-    theme = seo.detect_leela(script.title, script.text, script.keywords, script.lesson)
-    script.screen_hook = _pick_screen_hook(theme)
-    script.flashes = _pick_flashes(theme=theme)
+    script.screen_hook = _pick_screen_hook()
+    script.flashes = _pick_flashes()
+    if lesson and not script.seekh:
+        script.seekh = lesson
     return script
 
 
 def generate_scripts(count, topic=None):
-    """Return `count` Scripts. Uses Gemini per item when available, else fills
-    from unique fallback scripts to avoid repeats within a batch."""
+    """Return `count` Scripts, avoiding repeats within the batch."""
     count = max(1, int(count))
     results = []
 
@@ -453,18 +414,15 @@ def generate_scripts(count, topic=None):
     if not pool:
         return [generate_script(topic) for _ in range(count)]
     for i in range(count):
-        # COPY, don't reuse. quotes.json holds a couple of dozen scripts, so once
-        # `count` exceeds that, pool[i % len(pool)] hands back an object already
-        # in `results`; mutating it would overwrite the earlier reel's hook too.
+        # COPY, don't reuse. Once `count` exceeds the number of bundled scripts,
+        # pool[i % len(pool)] hands back an object already in `results`, and
+        # mutating it would overwrite the earlier reel's hook too.
         script = replace(pool[i % len(pool)])
         fresh_hook = history.pick("hooks", HOOK_CANDIDATES)
         script.text = swap_spoken_hook(script.text, fresh_hook)
         script.text = swap_cta(script.text)
         script.hook = fresh_hook
-        from . import seo
-
-        theme = seo.detect_leela(script.title, script.text, script.keywords, script.lesson)
-        script.screen_hook = _pick_screen_hook(theme)
-        script.flashes = _pick_flashes(theme=theme)
+        script.screen_hook = _pick_screen_hook()
+        script.flashes = _pick_flashes()
         results.append(script)
     return results

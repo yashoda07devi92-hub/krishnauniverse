@@ -47,7 +47,7 @@ import random
 
 from .config import BASE_DIR
 
-log = logging.getLogger("krishnakatha.history")
+log = logging.getLogger("krishna.history")
 
 HISTORY_PATH = os.path.join(str(BASE_DIR), "history.json")
 

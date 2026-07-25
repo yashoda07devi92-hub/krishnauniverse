@@ -1,30 +1,28 @@
 # -*- coding: utf-8 -*-
 """
-AI scene-image generation for Krishna Universe Shorts (vertical 9:16).
+AI scene-image generation for Krishna Universe Shorts.
 
-WHY THIS IS THE PRIMARY VISUAL SOURCE HERE
-------------------------------------------
-The pipeline this was ported from built its background out of Pexels stock
-VIDEO: search "puppy playing", get real moving footage. That approach cannot
-work for this channel, because there is no stock footage of Krishna, Vrindavan
-or Kurukshetra anywhere. Searching Pexels for "krishna" returns unrelated
-photographs of people.
+Uses Pollinations.ai to turn each narration beat into a cinematic vertical
+(1080x1920) frame of the actual leela being told.
 
-So the character frames are generated per-scene from the SAME model output that
-wrote the narration (see gemini_script: `scene_prompts`), and real Pexels
-footage is demoted to atmosphere cutaways between them -- river water, peacocks,
-lamp flames, monsoon rain. That mix is what stops the reel reading as a
-slideshow; see video_composer._mixed_background.
+WHY THIS REPLACES STOCK FOOTAGE
+-------------------------------
+The parent pipeline's whole visual layer was Pexels search: the story was about
+a puppy, so it searched "puppy playing" and got real footage. That approach has
+no equivalent here - there is no video of Krishna lifting Govardhan, and generic
+devotional stock clips have nothing to do with the leela being narrated, which
+is exactly what makes a mythology channel feel like recycled wallpaper.
 
-Generated with Pollinations.ai. A free API token (POLLINATIONS_TOKEN) massively
-reduces 429 rate-limiting; without it most requests fail and the reel would fall
-back to plain atmosphere footage with no Krishna in it at all, so the token is
-effectively required for this channel rather than optional.
+So the scenes are generated per beat from the ENGLISH scene prompts that
+gemini_script requests in the same call as the narration. Real Pexels footage is
+still used, but only for ATMOSPHERE (river, peacock, cows, diya, rain) which the
+composer interleaves between these frames - see video_composer._mixed_background.
+That mix of generated frames and genuine moving footage is what stops the result
+reading as a slideshow.
 
-Fully defensive: on ANY failure it returns whatever it managed to fetch. The
-video never fails because of this module.
-
-stdlib + requests only.
+Fully defensive: on any failure it returns whatever it managed to fetch, and the
+composer falls back to atmosphere footage and then a gradient. A video is never
+lost because image generation had a bad day.
 """
 
 import logging
@@ -44,15 +42,13 @@ log = logging.getLogger("krishna.aiimages")
 
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/"
 
-# Appended to every prompt. Two jobs:
-#   1) hold one consistent art direction across the whole channel, so a viewer
-#      recognises the look in the feed before they read the title;
-#   2) suppress text. Diffusion models love to paint garbled pseudo-Devanagari
-#      into the frame, and a Hindi-looking scribble on a devotional video looks
-#      worse than no text at all.
-NEGATIVE_SUFFIX = (
-    "no text, no words, no letters, no watermark, no signature, no caption, "
-    "no frame border, single coherent scene"
+# Appended to every prompt. Pollinations has no dedicated negative-prompt
+# parameter, so the exclusions ride along in the prompt text. Text suppression
+# matters more here than on most channels: generated Devanagari is always
+# malformed, and a frame with garbled Hindi scribbled across it looks broken.
+NEGATIVE_HINT = (
+    "no text, no watermark, no signature, no letters, no captions, "
+    "no distorted faces, no extra limbs"
 )
 
 
@@ -61,7 +57,7 @@ def _requests():
         import requests
 
         return requests
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:
         log.error("'requests' is required for AI images (%s).", exc)
         return None
 
@@ -73,8 +69,8 @@ def _looks_like_image(path):
         with open(path, "rb") as fh:
             head = fh.read(12)
         return (
-            head[:2] == b"\xff\xd8"                       # JPEG
-            or head[:8] == b"\x89PNG\r\n\x1a\n"           # PNG
+            head[:2] == b"\xff\xd8"                      # JPEG
+            or head[:8] == b"\x89PNG\r\n\x1a\n"          # PNG
             or (head[:4] == b"RIFF" and head[8:12] == b"WEBP")
         )
     except Exception:
@@ -82,31 +78,26 @@ def _looks_like_image(path):
 
 
 def _clear_old_images():
-    """Remove last run's frames so a partial failure cannot silently reuse
-    yesterday's pictures under today's narration."""
+    """Remove last run's frames so a partial failure cannot silently reuse them.
+
+    Without this, a run where generation fails would quietly compose yesterday's
+    scenes - a genuine repeat, and the one thing this channel must not produce.
+    """
     try:
-        for fname in os.listdir(IMAGES_DIR):
+        for fname in os.listdir(str(IMAGES_DIR)):
             if fname.startswith("scene_") and fname.lower().endswith((".jpg", ".png", ".webp")):
                 try:
-                    os.remove(os.path.join(IMAGES_DIR, fname))
+                    os.remove(os.path.join(str(IMAGES_DIR), fname))
                 except Exception:
                     pass
     except Exception:
         pass
 
 
-def _full_prompt(prompt):
-    style = get_cfg(
-        "ai_images.style",
-        "cinematic devotional Indian art, richly detailed painterly realism, "
-        "warm golden hour light, volumetric god rays, deep saturated colours, "
-        "ornate traditional Indian clothing and jewellery, 85mm depth of field",
-    )
-    return "%s, %s, %s" % (str(prompt).strip(), style, NEGATIVE_SUFFIX)
-
-
 def _fetch_one(requests, prompt, dest, width, height, seed):
-    url = POLLINATIONS_URL + urllib.parse.quote(_full_prompt(prompt))
+    style = get_cfg("ai_images.style", "")
+    full = ", ".join(p for p in (style, str(prompt).strip(), NEGATIVE_HINT) if p)
+    url = POLLINATIONS_URL + urllib.parse.quote(full)
     params = {
         "width": width,
         "height": height,
@@ -115,6 +106,9 @@ def _fetch_one(requests, prompt, dest, width, height, seed):
         "model": get_cfg("ai_images.model", "flux"),
         "referrer": "krishnauniverse",
     }
+    # A Pollinations API key (free signup) removes most 429 rate-limiting. On
+    # this channel the images ARE the video, so without a key a rate-limited run
+    # produces a reel with no Krishna in it at all.
     headers = {}
     token = get_env("POLLINATIONS_TOKEN")
     if token:
@@ -122,24 +116,24 @@ def _fetch_one(requests, prompt, dest, width, height, seed):
         params["token"] = token
     else:
         log.warning(
-            "POLLINATIONS_TOKEN is not set. Krishna frames are the whole visual "
-            "on this channel, and without a token most requests get 429'd."
+            "POLLINATIONS_TOKEN is not set. Scene images will be rate-limited and "
+            "many will fail. Get a free key at https://enter.pollinations.ai"
         )
 
-    attempts = max(1, int(get_cfg("ai_images.attempts", 3)))
+    attempts = int(get_cfg("ai_images.attempts", 4))
     for attempt in range(1, attempts + 1):
         try:
             with requests.get(url, params=params, headers=headers,
-                              timeout=90, stream=True) as resp:
+                              timeout=120, stream=True) as resp:
                 if resp.status_code == 429:
                     wait = 5 * attempt
                     log.warning("Pollinations 429 (attempt %d) for %r; waiting %ds",
-                                attempt, prompt[:40], wait)
+                                attempt, str(prompt)[:40], wait)
                     time.sleep(wait)
                     continue
                 if resp.status_code != 200:
                     log.warning("Pollinations HTTP %s (attempt %d) for %r",
-                                resp.status_code, attempt, prompt[:50])
+                                resp.status_code, attempt, str(prompt)[:50])
                     time.sleep(2 * attempt)
                     continue
                 tmp = dest + ".part"
@@ -163,10 +157,8 @@ def _fetch_one(requests, prompt, dest, width, height, seed):
 def generate_scene_images(scene_prompts, max_images=None):
     """Generate one vertical frame per scene prompt, in parallel.
 
-    Returns local image paths IN SCENE ORDER (possibly shorter than the input on
-    partial failure, or empty if the service is unavailable). Order matters: the
-    frames are shown in narration order, so an out-of-order list would show the
-    ending while the opening line is still being spoken.
+    Returns local image paths in scene order. May be shorter than the input on
+    partial failure, or empty if the service is unreachable.
     """
     if not get_cfg("ai_images.enabled", True):
         return []
@@ -179,17 +171,18 @@ def generate_scene_images(scene_prompts, max_images=None):
         return []
 
     if max_images is None:
-        max_images = int(get_cfg("ai_images.max_images", 6))
+        max_images = int(get_cfg("ai_images.max_images", 7))
     scene_prompts = scene_prompts[:max_images]
 
+    # Vertical by default - these frames fill a 1080x1920 Short. Generating at
+    # 16:9 and cropping (as the longform pipeline does) would cut the top of
+    # Krishna's crown and the bottom of the scene on every single frame.
     width = int(get_cfg("ai_images.width", 1080))
     height = int(get_cfg("ai_images.height", 1920))
-    workers = max(1, int(get_cfg("ai_images.workers", 3)))
-    # One seed family per run keeps the frames of a single reel visually
-    # consistent with each other while still differing between reels.
+    workers = max(1, int(get_cfg("ai_images.workers", 4)))
     base_seed = random.randint(1, 9_999_999)
 
-    os.makedirs(IMAGES_DIR, exist_ok=True)
+    os.makedirs(str(IMAGES_DIR), exist_ok=True)
     _clear_old_images()
 
     results = {}
@@ -200,7 +193,7 @@ def generate_scene_images(scene_prompts, max_images=None):
         return i, (dest if ok else None)
 
     t0 = time.time()
-    budget = float(get_cfg("ai_images.time_budget_seconds", 150))
+    budget = float(get_cfg("ai_images.time_budget_seconds", 240))
     ex = ThreadPoolExecutor(max_workers=workers)
     futures = [ex.submit(_task, i, p) for i, p in enumerate(scene_prompts)]
     done = 0
@@ -214,15 +207,14 @@ def generate_scene_images(scene_prompts, max_images=None):
             done += 1
             if path:
                 results[i] = path
-                log.info("AI frame ready (%d/%d done).", done, len(scene_prompts))
+                log.info("Scene image ready (%d/%d done).", done, len(scene_prompts))
             else:
-                log.warning("AI frame %d failed.", i + 1)
+                log.warning("Scene image %d failed.", i + 1)
     except FuturesTimeout:
-        log.warning("AI image budget (%.0fs) reached; proceeding with %d frame(s).",
+        log.warning("AI image time budget (%.0fs) reached; proceeding with %d image(s).",
                     budget, len(results))
     finally:
-        # Never block the whole job on slow / rate-limited image requests: a reel
-        # with four frames published on time beats six frames published late.
+        # Never block the whole job on slow or rate-limited requests.
         try:
             ex.shutdown(wait=False, cancel_futures=True)
         except TypeError:
@@ -230,12 +222,8 @@ def generate_scene_images(scene_prompts, max_images=None):
 
     paths = [results[i] for i in sorted(results.keys())]
     if paths:
-        log.info("Generated %d/%d AI frame(s) in %.0fs (parallel x%d).",
+        log.info("Generated %d/%d scene image(s) in %.0fs (parallel x%d).",
                  len(paths), len(scene_prompts), time.time() - t0, workers)
     else:
-        log.error(
-            "No AI frames generated. The reel will fall back to atmosphere "
-            "footage only, which means it will contain no Krishna imagery. "
-            "Check POLLINATIONS_TOKEN."
-        )
+        log.warning("No scene images generated; composer will use atmosphere footage.")
     return paths

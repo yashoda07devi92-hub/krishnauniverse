@@ -36,8 +36,9 @@ import random
 from .config import MUSIC_DIR, OUTPUT_DIR, get_cfg
 from . import pexels_video
 from . import subtitles
+from . import textrender
 
-log = logging.getLogger("krishnakatha.video")
+log = logging.getLogger("krishna.video")
 
 W = get_cfg("video.width", 1920)
 H = get_cfg("video.height", 1080)
@@ -47,25 +48,31 @@ FPS = get_cfg("video.fps", 30)
 # ==========================================================================
 # Background construction
 # ==========================================================================
-def _fit_cover(clip):
-    """Resize+crop a clip so it covers the full WxH frame (no letterboxing)."""
+def _fit_cover(clip, target_w=None, target_h=None):
+    """Resize+crop a clip so it covers the target frame (no letterboxing).
+
+    target_w/target_h default to the output frame. The motion engine passes a
+    deliberately LARGER target so there is spare image to pan across.
+    """
+    tw = int(target_w or W)
+    th = int(target_h or H)
     from moviepy.video.fx.all import crop
 
     try:
         cw, ch = clip.size
     except Exception:
-        return clip.resize((W, H))
+        return clip.resize((tw, th))
 
-    scale = max(W / float(cw), H / float(ch))
+    scale = max(tw / float(cw), th / float(ch))
     new_w = int(cw * scale)
     new_h = int(ch * scale)
     new_w += new_w % 2
     new_h += new_h % 2
     clip = clip.resize((new_w, new_h))
     try:
-        clip = crop(clip, width=W, height=H, x_center=new_w / 2, y_center=new_h / 2)
+        clip = crop(clip, width=tw, height=th, x_center=new_w / 2, y_center=new_h / 2)
     except Exception:
-        clip = clip.resize((W, H))
+        clip = clip.resize((tw, th))
     return clip
 
 
@@ -167,31 +174,93 @@ def _gradient_background(duration):
         return ColorClip(size=(W, H), color=tuple(solid)).set_duration(duration)
 
 
-def _ken_burns_from_image(path, duration, zoom_end=1.10):
-    """Background clip from a single image, covering the frame.
+# Camera moves available to the motion engine. A single slow centre zoom used
+# for every image - which is what this replaced - is exactly what reads as a
+# slideshow: the eye recognises the repeating move and stops believing the frame
+# is real.
+_MOVES = (
+    "push_in", "pull_out",
+    "pan_left", "pan_right",
+    "tilt_up", "tilt_down",
+    "diag_ul", "diag_dr",
+)
 
-    If ai_images.motion is OFF (default), returns a STATIC image clip - this is
-    the FASTEST to render (no per-frame resize) and actually the SHARPEST (no
-    resampling), keeping full HD quality. Smooth crossfades between images give
-    a polished slideshow feel without the heavy per-frame Ken-Burns zoom that
-    made rendering extremely slow.
+
+def _motion_from_image(path, duration, move=None):
+    """Animate a still with a real camera move. Returns a WxH clip.
+
+    WHY THIS REPLACED THE STATIC PATH
+    ---------------------------------
+    The previous function returned a STATIC image whenever ai_images.motion was
+    false - and false was the shipped default. So the long-form video was
+    literally a crossfaded photo sequence, which is precisely the "slideshow"
+    look this channel must not have.
+
+    The image is fitted to an OVERSCANNED frame, leaving spare pixels outside the
+    visible area, then translated inside a WxH composite so pixels genuinely move
+    across the frame rather than only scaling about the centre.
+
+    Pure translations skip moviepy's per-frame `resize`, which resamples the whole
+    oversized image on every frame and is the most expensive operation in the
+    render. Only the two zoom moves pay that cost, so most segments stay cheap -
+    which matters here, where a 6-8 minute video has far more frames than a Short.
     """
-    from moviepy.editor import ImageClip
+    from moviepy.editor import CompositeVideoClip, ImageClip
 
-    base = _fit_cover(ImageClip(path).set_duration(duration))
+    if move is None:
+        move = random.choice(_MOVES)
 
-    if not get_cfg("ai_images.motion", False):
-        return base.set_position(("center", "center"))
-
-    def scale(t):
-        frac = t / duration if duration else 0
-        return 1.0 + (zoom_end - 1.0) * frac
+    over = float(get_cfg("motion.overscan", 1.22))
+    zoom = float(get_cfg("motion.zoom_amount", 0.08))
+    ow = int(W * over); oh = int(H * over)
+    ow += ow % 2; oh += oh % 2
 
     try:
-        return base.resize(scale).set_position(("center", "center"))
+        base = _fit_cover(ImageClip(path).set_duration(duration), ow, oh)
     except Exception as exc:
-        log.warning("Ken-Burns resize failed (%s); static image.", exc)
-        return base
+        log.warning("Could not load scene image %s (%s).", path, exc)
+        return None
+
+    slack_x = max(0, ow - W)
+    slack_y = max(0, oh - H)
+    cx = -slack_x / 2.0
+    cy = -slack_y / 2.0
+
+    def frac(t):
+        return min(1.0, max(0.0, (t / duration) if duration else 0.0))
+
+    try:
+        if move in ("push_in", "pull_out"):
+            def scale(t):
+                f = frac(t)
+                return 1.0 + zoom * f if move == "push_in" else (1.0 + zoom) - zoom * f
+            seg = base.resize(scale).set_position(("center", "center"))
+            return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
+
+        def pos(t):
+            f = frac(t)
+            if move == "pan_left":
+                return (cx - (slack_x / 2.0) * f, cy)
+            if move == "pan_right":
+                return (cx + (slack_x / 2.0) * f, cy)
+            if move == "tilt_up":
+                return (cx, cy - (slack_y / 2.0) * f)
+            if move == "tilt_down":
+                return (cx, cy + (slack_y / 2.0) * f)
+            if move == "diag_ul":
+                return (cx - (slack_x / 2.0) * f, cy - (slack_y / 2.0) * f)
+            if move == "diag_dr":
+                return (cx + (slack_x / 2.0) * f, cy + (slack_y / 2.0) * f)
+            return (cx, cy)
+
+        seg = base.set_position(pos)
+        return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
+    except Exception as exc:
+        log.warning("Motion move %r failed for %s (%s); static frame.", move, path, exc)
+        try:
+            return _fit_cover(ImageClip(path).set_duration(duration))
+        except Exception:
+            return None
 
 
 def _images_background(image_paths, duration):
@@ -200,7 +269,8 @@ def _images_background(image_paths, duration):
     if not image_paths:
         raise RuntimeError("No images for background.")
     xfade = float(get_cfg("transitions.crossfade_seconds", 0.4))
-    per = max(3.0, duration / max(1, len(image_paths)))
+    per = max(2.0, min(float(get_cfg("video.scene_cut_seconds", 4.0)),
+                       duration / max(1, len(image_paths))))
     clips, total, idx, guard = [], 0.0, 0, 0
     while guard < 400:
         effective = total - max(0, len(clips) - 1) * xfade
@@ -212,14 +282,13 @@ def _images_background(image_paths, duration):
         seg_dur = min(per, duration - effective)
         if seg_dur <= 0:
             break
-        try:
-            clips.append(_ken_burns_from_image(path, seg_dur))
-            total += seg_dur
-        except Exception as exc:
-            log.warning("Ken-Burns failed for %s (%s).", path, exc)
+        seg = _motion_from_image(path, seg_dur, move=_MOVES[(idx - 1) % len(_MOVES)])
+        if seg is None:
             continue
+        clips.append(seg)
+        total += seg_dur
     if not clips:
-        raise RuntimeError("No Ken-Burns clips built.")
+        raise RuntimeError("No motion clips built.")
     return _concat_with_crossfade(clips, duration).set_duration(duration)
 
 
@@ -230,7 +299,7 @@ def _mixed_background(image_paths, clip_paths, duration):
     """
     from moviepy.editor import VideoFileClip, ImageClip
 
-    cut = float(get_cfg("video.clip_cut_seconds", 6.0))
+    cut = float(get_cfg("video.clip_cut_seconds", 3.0))
     # Build an interleaved, ordered asset list: img, clip, img, clip ...
     assets = []  # (kind, path)
     imgs = list(image_paths or [])
@@ -255,7 +324,11 @@ def _mixed_background(image_paths, clip_paths, duration):
         idx += 1
         try:
             if kind == "img":
-                seg = _fit_cover(ImageClip(path).set_duration(cut)).set_position(("center", "center"))
+                seg_dur = float(get_cfg("video.scene_cut_seconds", 4.0))
+                seg = _motion_from_image(path, seg_dur,
+                                        move=_MOVES[(idx - 1) % len(_MOVES)])
+                if seg is None:
+                    continue
             else:
                 vc = VideoFileClip(path, audio=False)
                 seg_dur = min(cut, vc.duration or cut)
@@ -263,7 +336,12 @@ def _mixed_background(image_paths, clip_paths, duration):
                     vc.close(); continue
                 seg = _fit_cover(vc.subclip(0, seg_dur))
             segments.append(seg)
-            total += cut
+            # Add the ACTUAL segment length, not `cut`. A real clip shorter than
+            # `cut` used to be counted as a full `cut`, so the loop believed it
+            # had covered more time than it had and the background came out
+            # SHORT of the narration - leaving the tail of the story over a
+            # stretched or looped final shot.
+            total += seg_dur
         except Exception as exc:
             log.warning("Mixed segment failed (%s); skipping.", exc)
             continue
@@ -338,23 +416,29 @@ def _apply_color_grade(clip):
 # ==========================================================================
 # Text helpers
 # ==========================================================================
-def _make_text_clip(txt, fontsize, color, stroke_color, stroke_width, font, max_w):
-    from moviepy.editor import TextClip
+def _make_text_clip(txt, fontsize, color, stroke_color, stroke_width, font, max_w,
+                    duration=1.0):
+    """Render text via Pillow instead of moviepy's TextClip.
 
-    try:
-        return TextClip(
-            txt, fontsize=fontsize, color=color, stroke_color=stroke_color,
-            stroke_width=stroke_width, font=font, method="caption",
-            size=(max_w, None), align="center",
-        )
-    except Exception as exc:
-        log.warning("TextClip(caption) failed (%s); trying label mode.", exc)
-        try:
-            return TextClip(txt, fontsize=fontsize, color=color,
-                            stroke_color=stroke_color, stroke_width=stroke_width, font=font)
-        except Exception as exc2:
-            log.warning("TextClip(label) also failed (%s); skipping text.", exc2)
-            return None
+    WHY NOT TextClip: it shells out to ImageMagick, which fails for Hindi twice
+    over. The configured DejaVu font contains no Devanagari glyphs, so every word
+    renders as an empty box; and ImageMagick's label/caption operators do not run
+    a complex-text shaper, so matras and conjuncts land in the wrong places even
+    with a correct font. Neither raises an error - it silently renders garbage.
+    modules/textrender uses Pillow, whose wheels bundle libraqm and therefore
+    shape Devanagari correctly.
+
+    `font` is accepted and ignored so existing call sites need no changes.
+    """
+    return textrender.make_clip(
+        txt,
+        duration=duration,
+        fontsize=int(fontsize),
+        color=textrender.parse_color(color, (255, 255, 255)),
+        stroke_color=textrender.parse_color(stroke_color, (0, 0, 0)),
+        stroke_width=int(stroke_width or 0),
+        max_width=int(max_w),
+    )
 
 
 def _hex_to_rgb(value, default=(0, 0, 0)):
@@ -450,12 +534,13 @@ def _build_caption_clips(text, duration, skip_before=0.0):
     for g in groups:
         if g["start"] < skip_before:
             continue
-        tc = _make_text_clip(g["text"], fontsize, color, stroke_color, stroke_width, font, max_w)
+        seg_dur = max(0.2, g["end"] - g["start"])
+        tc = _make_text_clip(g["text"], fontsize, color, stroke_color, stroke_width,
+                             font, max_w, duration=seg_dur)
         if tc is None:
             continue
-        seg_dur = max(0.2, g["end"] - g["start"])
         try:
-            tc = tc.set_start(g["start"]).set_duration(seg_dur).set_position(("center", y_top))
+            tc = tc.set_start(g["start"]).set_position(("center", y_top))
         except Exception as exc:
             log.warning("Could not place caption (%s).", exc)
             continue
@@ -486,8 +571,11 @@ def _build_intro_clips(title, hook):
     except Exception as exc:
         log.warning("Intro band failed (%s).", exc)
 
-    title_clip = _make_text_clip(title.upper(), fontsize, "#FFD54A", "black", 4,
-                                 get_cfg("captions.font", "DejaVu-Sans-Bold"), int(W * 0.85))
+    # No .upper(): Devanagari has no letter case, so it was a silent no-op that
+    # made the code read as though it were shouting.
+    title_clip = _make_text_clip(title, fontsize, "#FFD54A", "black", 4,
+                                 get_cfg("captions.font", "DejaVu-Sans-Bold"),
+                                 int(W * 0.85), duration=dur)
     if title_clip is not None:
         try:
             title_clip = (
@@ -500,7 +588,8 @@ def _build_intro_clips(title, hook):
 
     if hook:
         hook_clip = _make_text_clip(hook, int(fontsize * 0.5), "white", "black", 2,
-                                    get_cfg("captions.font", "DejaVu-Sans-Bold"), int(W * 0.8))
+                                    get_cfg("captions.font", "DejaVu-Sans-Bold"),
+                                    int(W * 0.8), duration=dur)
         if hook_clip is not None:
             try:
                 hook_clip = (
@@ -521,7 +610,7 @@ def _build_outro_clips(duration):
     start = max(0.0, duration - dur)
     fontsize = int(get_cfg("outro.fontsize", 64))
     cta = get_cfg("channel.cta", "Subscribe for a new moral story every day!")
-    channel = get_cfg("channel.name", "KrishnaKatha")
+    channel = get_cfg("channel.name", "Krishna Universe")
     overlays = []
     try:
         from moviepy.editor import ColorClip
@@ -533,8 +622,9 @@ def _build_outro_clips(duration):
     except Exception as exc:
         log.warning("Outro band failed (%s).", exc)
 
-    name_clip = _make_text_clip(channel.upper(), int(fontsize * 1.2), "#FFD54A", "black", 4,
-                                get_cfg("captions.font", "DejaVu-Sans-Bold"), int(W * 0.85))
+    name_clip = _make_text_clip(channel, int(fontsize * 1.2), "#FFD54A", "black", 4,
+                                get_cfg("captions.font", "DejaVu-Sans-Bold"),
+                                int(W * 0.85), duration=dur)
     if name_clip is not None:
         try:
             overlays.append(name_clip.set_start(start).set_duration(dur)
@@ -542,7 +632,8 @@ def _build_outro_clips(duration):
         except Exception:
             pass
     cta_clip = _make_text_clip(cta, fontsize, "white", "black", 3,
-                               get_cfg("captions.font", "DejaVu-Sans-Bold"), int(W * 0.8))
+                               get_cfg("captions.font", "DejaVu-Sans-Bold"),
+                               int(W * 0.8), duration=dur)
     if cta_clip is not None:
         try:
             overlays.append(cta_clip.set_start(start).set_duration(dur)

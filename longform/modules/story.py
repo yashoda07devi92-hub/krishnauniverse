@@ -1,5 +1,5 @@
 """
-Long-form moral-story generation for KrishnaKatha.
+Long-form moral-story generation for Krishna Universe.
 
 Produces a ~5-7 minute (about 750-1000 word) narrated MORAL STORY for kids in
 American English using Google's Gemini API. If no API key is configured, or
@@ -27,7 +27,7 @@ from .config import STORIES_PATH, get_cfg, get_env
 from .pools import CTA_CANDIDATES, TOPIC_POOL
 from . import history
 
-log = logging.getLogger("krishnakatha.story")
+log = logging.getLogger("krishna.story")
 
 # Lesson/topic seeds and spoken sign-offs now live in modules/pools.py so they can
 # be grown in one place: seeds 20 -> 80 (about 27 weeks at 3 episodes/week) and
@@ -36,76 +36,73 @@ log = logging.getLogger("krishnakatha.story")
 # returns until its pool is genuinely exhausted.
 
 
-_PROMPT_TEMPLATE = """You are the head writer for a faceless YouTube channel called
-"{channel}" that publishes ONE long, heartwarming MORAL STORY FOR CHILDREN
-every day. The audience is families in the USA. The narration is read aloud by
-a single warm, gentle storyteller voice.
+_PROMPT_TEMPLATE = """आप "{channel}" नाम के एक हिंदी YouTube चैनल के मुख्य लेखक हैं।
+इस चैनल पर भगवान श्रीकृष्ण के जीवन की एक पूरी कथा विस्तार से सुनाई जाती है।
+दर्शक भारत में हैं — आम हिंदी बोलने वाले परिवार। कथा एक शांत, गंभीर, कथावाचक
+जैसी आवाज़ में पढ़ी जाती है।
 
-Write ONE complete story of about {words} words. LENGTH IS IMPORTANT AND STRICT:
-read aloud it must run BETWEEN 3 AND 5 MINUTES, which is about {min_words} to
-{max_words} words. Do NOT go over {max_words} words - a story that runs past 5
-minutes will be rejected. Do NOT go under {min_words} words either: still tell a
-complete story with real scenes, just tell it tightly. Cut any scene that does
-not move the story forward. Follow ALL of these rules:
+इस विषय पर एक पूरी कथा लिखें:
+  कथा: {topic}
+  सीख: {lesson}
 
-HOOK (very important):
-- The first 1-2 sentences MUST be an irresistible hook that makes the viewer
-  stop and stay (a question, a promise, or a tiny mystery). Example styles:
-  "What would you do if you found a bag of gold that wasn't yours?" or
-  "Nobody in the village believed the smallest boy could do it - until that
-  morning." Make it fresh and specific to THIS story.
+लंबाई (बहुत ज़रूरी और सख़्त):
+- लगभग {words} शब्द। बोलने पर {min_words} से {max_words} शब्द = लगभग 5 से 8 मिनट।
+- {max_words} शब्द से ज़्यादा बिल्कुल नहीं — उससे लंबी कथा अस्वीकार कर दी जाएगी।
+- {min_words} से कम भी नहीं। पूरी कथा सुनाइए, दृश्यों के साथ — बस कसी हुई।
+- कोई भी दृश्य जो कथा को आगे नहीं बढ़ाता, हटा दें।
 
-RETENTION:
-- Tell the story in clear, simple, vivid language a 7-year-old can follow.
-- Use short scenes with a clear beginning, a problem, rising tension, a turning
-  point, and a satisfying ending.
-- Every minute or so, add a small "open loop" or cliffhanger line that makes
-  the listener want to keep going (e.g. "But what happened next, no one
-  expected.").
-- Keep sentences fairly short and easy to narrate. No tongue-twisters.
+शुरुआत (सबसे ज़रूरी हिस्सा):
+- पहले 1-2 वाक्य ऐसे हों कि दर्शक रुक जाए — एक सवाल, एक वादा, या एक छोटा रहस्य।
+  जैसे: "कंस को पता था कि उसकी मौत कैसे आएगी — फिर भी वो उसे रोक नहीं सका।"
+  हर कथा के लिए नया और उसी कथा से जुड़ा hook लिखें।
 
-MORAL:
-- The story must clearly teach the lesson: {lesson}.
-- Near the end, state the moral plainly in one clean sentence starting with
-  "The moral of the story is".
+दर्शक को रोके रखना:
+- सरल, बोलचाल की हिंदी। कठिन संस्कृत शब्द नहीं। एक बच्चा भी समझ जाए।
+- छोटे-छोटे दृश्य: शुरुआत, समस्या, तनाव बढ़ना, मोड़, और संतोष देने वाला अंत।
+- हर एक-दो मिनट पर एक ऐसी लाइन डालें जो आगे सुनने पर मजबूर करे, जैसे
+  "लेकिन आगे जो हुआ, वो किसी ने सोचा भी नहीं था।"
+- वाक्य छोटे रखें ताकि बोलने में आसान हों।
 
-EMOTION (very important):
-- Make the story genuinely HEART-TOUCHING - warm, emotional, the kind that
-  gives a gentle lump in the throat or happy tears by the end - while staying
-  simple and wholesome for children. Build a real emotional connection with the
-  main character so the ending truly lands.
+सीख:
+- कथा को ऊपर दी गई सीख तक साफ़-साफ़ पहुँचाना है।
+- अंत के पास सीख को एक साफ़ लाइन में कहें, इस तरह शुरू करते हुए:
+  "इस कथा की सीख यही है कि"
 
-CLOSE:
-- End with this exact spoken call to action: "{cta}"
+भाव (बहुत ज़रूरी):
+- कथा सच में दिल को छूने वाली हो — गर्म, भावुक, ऐसी कि अंत में गला भर आए।
+  मुख्य पात्र से दर्शक का सच्चा जुड़ाव बने, तभी अंत असर करेगा।
+- श्रद्धा बनाए रखें। कोई ऐसी बात न लिखें जो शास्त्रों में नहीं है, और कथा को
+  वैसे ही रखें जैसे वो प्रचलित है। किसी की भावना को ठेस न पहुँचे।
 
-FORMAT:
-- Plain spoken sentences only. No emojis, no stage directions, no markdown, no
-  chapter headings, no hashtags, no quotation marks around the whole thing.
-  American English.
-- Do NOT use brand names or real people.
+अंत:
+- सबसे आख़िर में बिल्कुल यही वाक्य लिखें: "{cta}"
 
-The story should be about: {topic}
+रूप:
+- केवल बोले जाने वाले वाक्य। कोई emoji नहीं, कोई hashtag नहीं, कोई markdown नहीं,
+  कोई stage direction नहीं, कोई अध्याय शीर्षक नहीं। देवनागरी में लिखें।
 
-Return ONLY a JSON object (no code fences) with these keys:
-  "title": a short, curiosity-driven title (max 9 words, no quotes),
-  "hook": the single opening hook sentence (used for the thumbnail too),
-  "moral": the one-sentence moral,
-  "main_character": a SHORT fixed visual description of the main character so
-          they look the SAME in every scene, e.g. "a 7-year-old boy with messy
-          black hair, a red shirt and bare feet" or "a small fluffy brown
-          puppy with a white patch". Keep it concrete and consistent.
-  "text": the FULL narration as one string (including the hook at the start
-          and the call to action at the end),
-  "scenes": an array of 10-14 SHORT visual descriptions, IN STORY ORDER, one per
-          key beat of the story. Each MUST describe the CHARACTERS + setting +
-          action of that moment so an illustrator could draw it, e.g.
-          "a poor young boy in torn clothes crying beside a forest river at
-          dawn", "a kind old woman handing bread to a hungry child". Keep each
-          to a single vivid sentence. NO text/words in the scene.
-  "keywords": an array of 5-8 short stock-footage search phrases that match the
-          SETTING and ACTION of the story (e.g. "forest path sunlight",
-          "child running village", "old man smiling"). Describe scenery and
-          gentle human/nature action - NEVER request real brands or text.
+सिर्फ़ एक JSON object लौटाएँ (कोई code fence नहीं), इन keys के साथ:
+  "title": हिंदी में छोटा, जिज्ञासा जगाने वाला शीर्षक (अधिकतम 9 शब्द),
+  "hook": शुरुआत का वही एक hook वाक्य (thumbnail पर भी यही जाता है),
+  "moral": सीख एक हिंदी लाइन में,
+  "main_character": मुख्य पात्र का SHORT visual description, ENGLISH में, ताकि
+          वो हर दृश्य में एक जैसा दिखे। जैसे: "young lord krishna, around 8
+          years old, blue-tinted skin, peacock feather in his hair, yellow
+          dhoti, bare feet". ठोस और स्थिर रखें, हर scene में यही इस्तेमाल होगा।
+  "text": पूरी कथा एक string में (शुरुआत का hook और अंत का CTA दोनों शामिल),
+  "scenes": 10 से 14 SHORT visual descriptions का array, कथा के क्रम में, ENGLISH
+          में। हर scene उस पल के पात्र + जगह + क्रिया + रोशनी बताए, जैसे
+          "young krishna lifting a mountain over a village while heavy rain
+          falls, villagers sheltering beneath, dramatic storm light". हर scene
+          एक ही सजीव वाक्य। दृश्य में कोई text/अक्षर नहीं।
+          ये सब अंग्रेज़ी में ही लिखें, हिंदी में नहीं — image model हिंदी prompt
+          से बिगड़ा हुआ चित्र बनाता है।
+  "keywords": 5-8 ENGLISH stock-footage search phrases, सिर्फ़ ATMOSPHERE के लिए
+          जो असल में video sites पर मिलती हैं — "river water flowing sunlight",
+          "peacock feathers close up", "cows grazing green field india",
+          "oil lamp diya flame dark", "monsoon rain on leaves". इनमें कृष्ण या
+          कोई देवता नहीं होना चाहिए — असली footage मौजूद ही नहीं है; ये सिर्फ़
+          पृष्ठभूमि की बनावट के लिए हैं।
 """
 
 
@@ -123,7 +120,7 @@ class Story:
         if not self.keywords:
             self.keywords = list(get_cfg("pexels.default_keywords", []))
         if not self.hook:
-            parts = re.split(r"(?<=[.!?])\s+", self.text.strip(), maxsplit=1)
+            parts = re.split(r"(?<=[।.!?])\s+", self.text.strip(), maxsplit=1)
             self.hook = parts[0] if parts else self.title
         if not self.scenes:
             self.scenes = derive_scenes_from_text(self.text)
@@ -137,7 +134,7 @@ def derive_scenes_from_text(text, target=12):
     """Fallback: split the narration into ~target visual scene prompts so AI
     images can still be generated when the model didn't return a 'scenes' list
     (e.g. the bundled fallback stories)."""
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if s.strip()]
+    sentences = [s.strip() for s in re.split(r"(?<=[।.!?])\s+", (text or "").strip()) if s.strip()]
     if not sentences:
         return []
     target = max(4, min(target, len(sentences)))
@@ -217,7 +214,7 @@ def _trim_to_words(story, max_words):
     here instead, at a sentence boundary, and the moral plus the sign-off are
     re-appended so the story still lands properly instead of stopping mid-scene.
     """
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+", story.text.strip()) if s]
+    sentences = [s for s in re.split(r"(?<=[।.!?])\s+", story.text.strip()) if s]
     kept, used = [], 0
     # Reserve room for the moral and the closing CTA we are about to add back.
     reserve = len((story.moral or "").split()) + 12
@@ -297,7 +294,7 @@ def _generate_with_gemini(lesson, topic):
                 log.warning("Model '%s' returned no usable text; trying next.", model_name)
                 continue
             story = Story(
-                title=str(data.get("title") or "A Moral Story").strip(),
+                title=str(data.get("title") or "श्रीकृष्ण की एक कथा").strip(),
                 text=str(data["text"]).strip(),
                 hook=str(data.get("hook") or "").strip(),
                 moral=str(data.get("moral") or "").strip(),
@@ -353,7 +350,7 @@ def load_fallback_stories():
             try:
                 stories.append(
                     Story(
-                        title=str(item.get("title", "A Moral Story")),
+                        title=str(item.get("title", "श्रीकृष्ण की एक कथा")),
                         text=str(item["text"]),
                         hook=str(item.get("hook", "")),
                         moral=str(item.get("moral", "")),

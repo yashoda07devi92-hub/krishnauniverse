@@ -1,5 +1,5 @@
 # ============================================================================
-# Krishna Universe Katha - Python dependencies
+# MoralTales Longform - Python dependencies
 # FREE + open-source tools only. Pinned for reproducible CI builds.
 # ============================================================================
 

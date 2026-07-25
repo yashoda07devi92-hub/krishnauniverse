@@ -1,34 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-SEO / metadata layer for Krishna Universe Shorts (Hindi).
+Hindi SEO / metadata layer for Krishna Universe Shorts.
 
-WHAT THIS REPLACES
-------------------
-In the pipeline this was ported from, metadata was assembled in five different
-places and every one of them was fixed: the uploader appended an identical
-"| Cute & Wholesome #shorts #cute" suffix to every title, the same eight hashtags
-went on every video, and the description was the narration pasted verbatim plus
-boilerplate. Across 113 uploads that produced one identical metadata fingerprint,
-which is precisely the pattern YouTube's inauthentic-content policy describes as
-"mass-produced and repetitious".
+Builds a per-video title, description, tag set, hashtag set and pinned comment.
 
-So everything here is per-video and drawn through modules/history.py (no
-repeats until a pool is exhausted):
+WHY THIS IS A MODULE AND NOT A FORMAT STRING
+--------------------------------------------
+The channel this pipeline was ported from had its metadata hard-coded in the
+uploader: every upload got the same title suffix and the same hashtag block, so
+100+ videos shared an identical metadata fingerprint. That is the pattern
+YouTube's inauthentic-content policy describes as template-based, and it is also
+simply invisible in search - a hundred videos all competing on the same string.
 
-  build_title        -> Hindi title, search anchor first, 40 rotating patterns
-  build_hashtags     -> per-video Hindi + English hashtag mix
-  build_tags         -> tag set packed into YouTube's 500-character budget
-  build_description  -> hook line, teaser, lesson, question, sign-off, tags
-  build_pinned_comment
-  build_metadata     -> all of the above in one call
+So every element is assembled per video from a rotating pool, drawn through
+modules/history.py (no repeats until a pool is exhausted), and anchored on a
+search phrase that matches what Hindi viewers actually type.
 
-LANGUAGE CHOICE
----------------
-Titles and descriptions are Hindi, because the audience is Indian and Hindi
-queries are what this content actually ranks for. Tags carry BOTH scripts: real
-users search "krishna katha" in Latin script as often as "कृष्ण कथा", and tags
-are the cheap place to cover both without making the title look like keyword
-soup.
+BILINGUAL ON PURPOSE
+--------------------
+Indian viewers search this niche in both scripts - "कृष्ण कथा" and "krishna
+story in hindi" are both high-volume. Titles carry Devanagari (that is what the
+audience reads in the feed) while tags carry both, because a romanised tag is
+invisible to a Devanagari-only tag set and vice versa.
 """
 
 import logging
@@ -42,495 +35,758 @@ log = logging.getLogger("krishna.seo")
 
 
 # ==========================================================================
-# Which part of Krishna's life is this?
+# Leela category detection
 # ==========================================================================
-# Used for three things: choosing the search anchor, choosing hashtags, and
-# choosing which real-footage atmosphere set the composer should cut to. Getting
-# it wrong is not cosmetic -- a Kurukshetra story tagged as a Gokul bal-leela is
-# served to the wrong audience and dies.
-#
-# Scoring is WEIGHTED BY SOURCE rather than first-match. The narration's opening
-# sentence is a randomly drawn hook that frequently names an unrelated character
-# ("कृष्ण ने अर्जुन से कहा..." on a Gokul story), so a naive scan of the full text
-# mislabels a large share of reels. Title and keywords are trusted most; the
-# hook sentence is excluded outright.
-_THEME_TOKENS = {
-    "janm": ["कारागार", "जन्म", "देवकी", "वसुदेव", "कंस का भय", "आधी रात", "गर्भ"],
-    "gokul": ["गोकुल", "यशोदा", "नंद", "माखन", "मटकी", "बाल", "गाय", "ग्वाल", "मिट्टी", "रस्सी", "दामोदर", "पूतना", "शकटासुर", "तृणावर्त"],
-    "vrindavan": ["वृंदावन", "राधा", "बाँसुरी", "मुरली", "यमुना", "गोपी", "ग्वालिन", "मोर", "कालिया", "अघासुर", "धेनुकासुर", "प्रलंब"],
-    "govardhan": ["गोवर्धन", "इंद्र", "बरसात", "वर्षा", "छत्र", "पर्वत"],
-    "mathura": ["मथुरा", "कंस", "अक्रूर", "कुब्जा", "चाणूर", "मुष्टिक", "धनुष", "उग्रसेन", "धोबी"],
-    "dwarka": ["द्वारका", "रुक्मिणी", "सत्यभामा", "जरासंध", "कालयवन", "स्यमंतक", "नरकासुर", "समुद्र", "मुचुकुंद"],
-    "kurukshetra": ["कुरुक्षेत्र", "अर्जुन", "युद्ध", "भीष्म", "कर्ण", "अभिमन्यु", "चक्रव्यूह", "दुर्योधन", "द्रौपदी", "गांडीव", "बर्बरीक", "घटोत्कच", "युधिष्ठिर", "एकलव्य", "पांडव", "सारथी"],
-    "gita": ["गीता", "आत्मा", "कर्म", "फल की चिंता", "क्रोध", "संदेह", "स्थिर", "अध्याय", "उपदेश", "धर्म"],
-    "sudama": ["सुदामा", "चावल", "पोटली", "सांदीपनि", "गुरु", "आश्रम", "मित्र", "दोस्ती", "विदुर"],
-    "ant": ["प्रभास", "उद्धव", "गांधारी", "श्राप", "शिकारी", "शरीर छोड़", "अंतिम", "पीपल"],
+# Weighted token match. The narration's FIRST sentence is excluded before
+# scoring: it is a randomly drawn hook from pools.HOOK_CANDIDATES and mentions
+# whatever leela that hook happens to reference, which would mislabel the video.
+# (The parent pipeline hit exactly this bug - kitten videos were being tagged
+# with dog hashtags because of the hook sentence.)
+_TOKEN_PATTERNS = {
+    "bal_leela": (
+        "माखन|मक्खन|यशोदा|नंद|गोकुल|पूतना|बचपन|बाल|ऊखल|दामोदर|तृणावर्त|"
+        "शकटासुर|घुटनों|पालना|कारागार|देवकी|वसुदेव|कंस|जन्म|यमुना पार|"
+        "makhan|yashoda|gokul|putana|bal|krishna janm"
+    ),
+    "vrindavan": (
+        "वृंदावन|राधा|गोपी|बांसुरी|रास|गोवर्धन|कालिया|मोर|गाय|ग्वाल|"
+        "यमुना|बरसाना|मुरली|प्रेम|सखा|दावानल|इंद्र|"
+        "vrindavan|radha|gopi|bansuri|govardhan|kaliya|raas"
+    ),
+    "gita": (
+        "गीता|उपदेश|अर्जुन|कर्म|कर्मयोग|आत्मा|निष्काम|स्थितप्रज्ञ|"
+        "विश्वरूप|श्लोक|ज्ञान|योग|समत्व|मन को|संशय|"
+        "gita|geeta|arjun|karma|updesh|shlok"
+    ),
+    "mahabharat": (
+        "महाभारत|द्रौपदी|पांडव|कौरव|दुर्योधन|भीष्म|कर्ण|अभिमन्यु|बर्बरीक|"
+        "चक्रव्यूह|कुरुक्षेत्र|सारथी|युद्ध|शकुनि|द्रोण|गांधारी|अश्वत्थामा|"
+        "युधिष्ठिर|भीम|विदुर|हस्तिनापुर|"
+        "mahabharat|draupadi|pandav|karna|barbarik|kurukshetra"
+    ),
+    "dwarka": (
+        "द्वारका|रुक्मिणी|सत्यभामा|सुदामा|मथुरा|जरासंध|शिशुपाल|नरकासुर|"
+        "स्यमंतक|उग्रसेन|संदीपनी|गुरुकुल|कुब्जा|अक्रूर|पारिजात|"
+        "dwarka|rukmini|sudama|mathura|jarasandh"
+    ),
+    "bhakti": (
+        "भक्ति|उद्धव|वैराग्य|शरण|समर्पण|नाम|कृपा|श्रद्धा|प्रार्थना|"
+        "चौबीस गुरु|देह त्याग|प्रभास|जरा|क्षमा|"
+        "bhakti|uddhav|sharan|kripa|vairagya"
+    ),
 }
 
-DEFAULT_THEME = "gita"
-
 _W_TITLE = 3
-_W_KEYWORDS = 2
-_W_LESSON = 2
+_W_KEYWORDS = 3
 _W_BODY = 1
+_PRESENCE_THRESHOLD = 2
+
+DEFAULT_SUBJECT = "bhakti"
 
 
 def _strip_hook_sentence(text):
-    """Drop the first sentence: it is a randomly drawn hook, not story content.
+    """Drop the first sentence - it is a randomly drawn hook, not story content.
 
-    Hindi sentences end in a danda as often as a full stop, so both count.
+    Splits on the Devanagari danda as well as western punctuation; splitting on
+    '.' alone would leave a Hindi paragraph as a single sentence and strip the
+    whole narration.
     """
     body = str(text or "").strip()
     parts = re.split(r"(?<=[।.!?])\s+", body, maxsplit=1)
     return parts[1] if len(parts) == 2 else body
 
 
-def detect_leela(title="", text="", keywords=None, lesson=""):
-    """Return the theme key for this story (see _THEME_TOKENS)."""
-    sources = (
-        (str(title or ""), _W_TITLE),
-        (" ".join(str(k) for k in (keywords or [])), _W_KEYWORDS),
-        (str(lesson or ""), _W_LESSON),
-        (_strip_hook_sentence(text), _W_BODY),
-    )
+def detect_subject(title="", text="", keywords=None):
+    """Classify which part of Krishna's life this video is about.
+
+    Weighted so the title and the footage keywords count for more than the body,
+    because the body is long and mentions many names in passing.
+    """
+    kw_blob = " ".join(str(k) for k in (keywords or []))
+    body = _strip_hook_sentence(text)
+
     scores = {}
-    for theme, tokens in _THEME_TOKENS.items():
-        score = 0
-        for blob, weight in sources:
-            if not blob:
-                continue
-            for tok in tokens:
-                if tok in blob:
-                    score += weight
-        if score:
-            scores[theme] = score
-    if not scores:
-        return DEFAULT_THEME
-    best = max(scores.values())
-    # Deterministic tie-break so the same story always resolves the same way.
-    winners = sorted(t for t, s in scores.items() if s == best)
-    return winners[0]
+    for name, pattern in _TOKEN_PATTERNS.items():
+        rx = re.compile(pattern, re.IGNORECASE)
+        score = (
+            _W_TITLE * len(rx.findall(str(title or "")))
+            + _W_KEYWORDS * len(rx.findall(kw_blob))
+            + _W_BODY * len(rx.findall(body))
+        )
+        scores[name] = score
+
+    best = max(scores, key=lambda k: scores[k])
+    if scores[best] < _PRESENCE_THRESHOLD:
+        return DEFAULT_SUBJECT
+    return best
 
 
 # ==========================================================================
 # Titles
 # ==========================================================================
-# The anchor goes FIRST. YouTube truncates in the feed and search snippet, and a
-# title that opens with the searchable phrase both ranks and reads better than
-# one that buries it behind a clever clause.
+# The searchable phrase each title is anchored on. These are the terms Hindi
+# viewers actually type; a title with none of them ranks for nothing.
 SEARCH_ANCHORS = {
-    "janm": ["कृष्ण जन्म कथा", "श्रीकृष्ण जन्म", "कृष्ण कथा"],
-    "gokul": ["कृष्ण बाल लीला", "बाल कृष्ण कथा", "कृष्ण लीला"],
-    "vrindavan": ["कृष्ण लीला", "वृंदावन की कथा", "राधा कृष्ण कथा"],
-    "govardhan": ["गोवर्धन लीला", "कृष्ण लीला", "कृष्ण कथा"],
-    "mathura": ["कृष्ण कथा", "कंस वध कथा", "श्रीकृष्ण कथा"],
-    "dwarka": ["द्वारकाधीश कथा", "श्रीकृष्ण कथा", "कृष्ण कथा"],
-    "kurukshetra": ["महाभारत कथा", "कृष्ण अर्जुन संवाद", "महाभारत की सीख"],
-    "gita": ["भगवद गीता ज्ञान", "गीता उपदेश", "गीता सार"],
-    "sudama": ["कृष्ण सुदामा कथा", "कृष्ण कथा", "सच्ची मित्रता"],
-    "ant": ["श्रीकृष्ण कथा", "कृष्ण की सीख", "कृष्ण कथा"],
+    "bal_leela": [
+        "कृष्ण बाल लीला", "कान्हा की कहानी", "श्रीकृष्ण लीला", "कृष्ण जन्म कथा",
+        "बाल कृष्ण कथा", "कान्हा की बाल लीला", "कृष्ण कथा हिंदी",
+            "कान्हा की बचपन की कहानी", "बाल गोपाल कथा", "कृष्ण की बाल कथा",
+    ],
+    "vrindavan": [
+        "वृंदावन की कथा", "राधा कृष्ण कथा", "कृष्ण लीला", "गोवर्धन कथा",
+        "कान्हा की लीला", "राधा कृष्ण प्रेम कथा", "कृष्ण कथा",
+            "वृंदावन लीला", "कृष्ण की लीला कथा", "ब्रज की कथा",
+    ],
+    "gita": [
+        "गीता उपदेश", "भगवद गीता हिंदी", "गीता ज्ञान", "श्रीकृष्ण उपदेश",
+        "गीता का सार", "कृष्ण अर्जुन संवाद", "गीता सीख",
+            "गीता का उपदेश हिंदी", "श्रीमद्भगवद्गीता", "गीता अध्याय सार",
+    ],
+    "mahabharat": [
+        "महाभारत कथा", "महाभारत की कहानी", "कृष्ण महाभारत", "महाभारत रहस्य",
+        "महाभारत सीख", "महाभारत प्रसंग", "कृष्ण कथा महाभारत",
+            "महाभारत का प्रसंग", "महाभारत हिंदी कथा", "महाभारत की सीख",
+    ],
+    "dwarka": [
+        "श्रीकृष्ण कथा", "सुदामा चरित्र", "द्वारकाधीश कथा", "कृष्ण मथुरा कथा",
+        "कृष्ण की कहानी", "रुक्मिणी विवाह कथा",
+            "द्वारका की कथा", "कृष्ण द्वारका लीला", "श्रीकृष्ण जीवन कथा",
+    ],
+    "bhakti": [
+        "कृष्ण भक्ति कथा", "श्रीकृष्ण की सीख", "कान्हा की सीख", "कृष्ण उपदेश",
+        "प्रेरणादायक कथा", "कृष्ण कथा हिंदी", "भक्ति कथा",
+            "कृष्ण भक्ति की कथा", "श्रीकृष्ण महिमा", "भक्ति की सीख",
+    ],
 }
 
-# Secondary phrases that widen the query surface without changing meaning.
-QUALIFIERS = [
-    "जो हर किसी को जाननी चाहिए",
-    "एक अनसुनी बात",
-    "आज भी लागू होती है",
-    "जीवन बदल देने वाली सीख",
-    "सबसे गहरी सीख",
-    "जो सब भूल गए",
-    "हर घर की कहानी",
-    "एक छोटी सी बात",
-    "जिसने सबको चुप कर दिया",
-    "समझ लो तो जीवन आसान",
-]
-
+# 40 patterns. {core} is the story title, {anchor} the search phrase. A single
+# fixed pattern is what made the parent channel's grid read as one video posted
+# a hundred times.
 TITLE_PATTERNS = [
-    "{anchor}: {core}",
-    "{anchor} | {core}",
-    "{anchor} - {core}",
     "{core} | {anchor}",
-    "{anchor}: {core} | {qual}",
-    "{core} - {anchor}",
-    "{anchor} | {core} | {qual}",
-    "{core} | {anchor} | {qual}",
-    "{anchor}: {qual} | {core}",
-    "{core}: {qual} | {anchor}",
-    "{anchor} | {qual}",
-    "{core} | {qual} | {anchor}",
-    "{anchor} - {core} | {qual}",
-    "{core} - {qual} | {anchor}",
-    "{anchor}: {core} - {qual}",
-    "{qual} | {anchor}: {core}",
-    "{anchor} | जानिए {core}",
-    "{core} | {anchor} की सीख",
-    "{anchor}: क्यों {core}",
-    "{core} | श्रीकृष्ण की सीख | {anchor}",
+    "{anchor}: {core}",
+    "{core} — {anchor}",
+    "{core} | {anchor} #shorts",
+    "{anchor} | {core}",
+    "जब {core} | {anchor}",
+    "{core}? | {anchor}",
+    "सुनिए: {core} | {anchor}",
+    "{core} की सीख | {anchor}",
+    "{core} | एक सीख | {anchor}",
+    "क्या आप जानते हैं? {core} | {anchor}",
+    "{core} — ये सीख याद रखिए | {anchor}",
+    "{core} | {anchor} | कृष्ण कथा",
+    "एक कथा: {core} | {anchor}",
+    "{core} | सबसे बड़ी सीख | {anchor}",
+    "{anchor} — {core} की कहानी",
+    "{core} | ये सुनकर सोच बदल जाएगी",
+    "{core} | {anchor} | हिंदी कथा",
+    "आज की कथा: {core} | {anchor}",
+    "{core} | कान्हा की सीख | {anchor}",
+    "{core} — {anchor} | Shorts",
+    "{core} | {anchor} | प्रेरणा",
+    "{core}! | {anchor}",
+    "{anchor} | {core} | सीख",
+    "{core} | अंत तक सुनिए | {anchor}",
+    "{core} — क्यों? | {anchor}",
+    "{core} | {anchor} | कथा और सीख",
+    "जानिए {core} | {anchor}",
+    "{core} | एक गहरी सीख | {anchor}",
+    "{core} | {anchor} | भक्ति",
+    "{core} की असली सीख | {anchor}",
+    "{anchor}: {core} | सुनिए",
+    "{core} | ये बात हर किसी को पता होनी चाहिए",
+    "{core} | {anchor} | कृष्ण उपदेश",
+    "{core} — {anchor} | हिंदी",
+    "{core} | जीवन बदलने वाली सीख",
+    "{anchor} | {core} — सुनिए",
+    "{core} | {anchor} | आज की सीख",
+    "{core} — सुनिए पूरी कथा | {anchor}",
+    "{core} | {anchor} | Krishna Story",
+    "{core} | {anchor} | सुनिए पूरी बात",
+    "{anchor} | {core} | एक सीख",
+    "{core} — इसका असली मतलब | {anchor}",
+    "{core} | {anchor} | ज़रूर सुनिए",
+    "क्यों? {core} | {anchor}",
+    "{core} | {anchor} | भक्ति कथा",
+    "{core} — ये किसी ने नहीं बताया | {anchor}",
+    "{anchor} — {core} | सुनिए",
+    "{core} | {anchor} | सीख भरी कथा",
+    "{core} | एक-एक शब्द सुनिए | {anchor}",
+    "{core} — {anchor} | आज की बात",
+    "{core} | {anchor} | कान्हा की कथा",
+    "{core} | यही सबसे बड़ी बात है",
+    "{anchor} | {core} — क्या हुआ था",
+    "{core} — पूरी बात | {anchor}",
+    "{core} | {anchor} | अद्भुत कथा",
+    "{core} | सुनकर मन शांत हो जाएगा",
+    "{anchor}: {core} — एक सीख",
+    "{core} | {anchor} | अनसुनी कथा",
+    "{core} — {anchor} | प्रेरणा",
 ]
 
-TITLE_SOFT_LIMIT = 70
+# Phrases that are true of EVERY video on this channel, so they can be used to
+# pad a description's first line without ever claiming the video is about a
+# leela it does not tell. Deliberately separate from SEARCH_ANCHORS, whose
+# entries name specific episodes.
+GENERIC_ANCHORS = [
+    "कृष्ण कथा", "कृष्ण कथा हिंदी", "श्रीकृष्ण की सीख", "कान्हा की कहानी",
+    "कृष्ण लीला", "भक्ति कथा", "प्रेरणादायक कथा", "hindi krishna story",
+]
+
+TITLE_SOFT_LIMIT = 78
 TITLE_HARD_LIMIT = 100
 
 
 def _clean_core(core):
-    """Strip any legacy suffix / stray hashtags out of the model's title."""
+    """Strip legacy decoration so a title is never decorated twice."""
     s = " ".join(str(core or "").split())
-    s = re.sub(r"\s*[|\-–—]\s*(Cute & Wholesome|Krishna Universe).*$", "", s, flags=re.I)
-    s = re.sub(r"#\w+", "", s)
-    s = s.strip(" |-–—:।")
-    return s or "कृष्ण की एक सीख"
+    # Remove any trailing " | ..." / " — ..." the model may have added itself.
+    s = re.sub(r"\s*[|—–]\s*[^|—–]*$", "", s) if s.count("|") + s.count("—") > 1 else s
+    s = re.sub(r"#\S+", "", s).strip()
+    return s.strip(" |—–:-") or "श्रीकृष्ण की एक सीख"
 
 
-def build_title(core_title, text="", keywords=None, theme=None, lesson="", rng=None):
-    """Assemble a per-video Hindi title. Never returns a fixed suffix."""
+def build_title(core_title, text="", keywords=None, subject=None, rng=None):
+    """Compose the published title: story core + a real search anchor."""
     rng = rng or random
-    theme = theme or detect_leela(core_title, text, keywords, lesson)
+    subject = subject or detect_subject(core_title, text, keywords)
     core = _clean_core(core_title)
-    anchor = rng.choice(SEARCH_ANCHORS.get(theme, SEARCH_ANCHORS[DEFAULT_THEME]))
-    qual = history.pick("title_quals", QUALIFIERS)
-    pattern = history.pick("title_patterns", TITLE_PATTERNS)
 
-    title = pattern.format(anchor=anchor, core=core, qual=qual)
+    anchors = SEARCH_ANCHORS.get(subject) or SEARCH_ANCHORS[DEFAULT_SUBJECT]
+    # PER-SUBJECT history key. A single shared "title_anchors" key put every
+    # subject's anchors in one used-list, so a gita video would mark the whole
+    # list dirty for the next vrindavan video, the small per-subject pool would
+    # read as exhausted, and the draw would reset constantly - degrading to
+    # near-random and colliding far more than the pool size implies. Keyed by
+    # subject, each leela's anchors genuinely rotate without replacement.
+    anchor = history.pick("title_anchors_" + subject, list(anchors)) or anchors[0]
+    # Patterns are keyed per subject for the same reason. A single global pattern
+    # pool cycles every 60 uploads, so a leela that comes up ~40 times across a
+    # 90-day run kept landing on a pattern it had already used with the same
+    # anchor. Keyed per subject, that leela's own videos walk the 60 patterns
+    # nearly without repeating, which is what stops two tellings of the SAME
+    # story from getting an identical title.
+    pattern = (history.pick("title_patterns_" + subject, list(TITLE_PATTERNS))
+               or TITLE_PATTERNS[0])
+
+    title = pattern.format(core=core, anchor=anchor)
     title = " ".join(title.split())
 
-    # Try progressively shorter shapes rather than hard-truncating mid-word,
-    # which is how the old pipeline produced titles ending in "| Cu".
     if len(title) > TITLE_SOFT_LIMIT:
-        for fallback in ("{anchor}: {core}", "{core} | {anchor}", "{anchor} | {core}"):
-            attempt = " ".join(fallback.format(anchor=anchor, core=core, qual=qual).split())
-            if len(attempt) <= TITLE_SOFT_LIMIT:
-                title = attempt
-                break
+        # Shorten the story core rather than dropping the anchor: the anchor is
+        # the part that earns impressions.
+        room = TITLE_SOFT_LIMIT - (len(title) - len(core))
+        if room > 18:
+            trimmed = core[:room].rstrip(" ,।-")
+            title = " ".join(pattern.format(core=trimmed, anchor=anchor).split())
     if len(title) > TITLE_HARD_LIMIT:
-        title = title[:TITLE_HARD_LIMIT].rsplit(" ", 1)[0]
+        title = title[:TITLE_HARD_LIMIT].rstrip(" |—–:,")
     return title
 
 
 # ==========================================================================
 # Hashtags
 # ==========================================================================
-# YouTube shows the first three above the title, so #shorts is not first: it wins
-# nothing there and wastes the most valuable slot. A topical Hindi tag goes first.
-HASHTAG_CORE = ["#कृष्ण", "#कृष्णकथा", "#shorts"]
+# Devanagari hashtags work on YouTube and are what this audience taps, but a
+# few romanised ones are kept because search suggestions surface those too.
+HASHTAG_CORE = ["#shorts", "#कृष्ण", "#krishna", "#भक्ति", "#कृष्णकथा"]
 
-HASHTAG_THEME = {
-    "janm": ["#कृष्णजन्म", "#जन्माष्टमी", "#krishnajanma"],
-    "gokul": ["#बाललीला", "#गोकुल", "#ladducopal", "#krishnaleela"],
-    "vrindavan": ["#वृंदावन", "#राधाकृष्ण", "#radhakrishna", "#vrindavan"],
-    "govardhan": ["#गोवर्धन", "#गिरिराज", "#govardhan"],
-    "mathura": ["#मथुरा", "#कंसवध", "#mathura"],
-    "dwarka": ["#द्वारकाधीश", "#रुक्मिणी", "#dwarkadhish"],
-    "kurukshetra": ["#महाभारत", "#अर्जुन", "#mahabharat", "#kurukshetra"],
-    "gita": ["#भगवदगीता", "#गीतासार", "#bhagavadgita", "#gitagyan"],
-    "sudama": ["#सुदामा", "#मित्रता", "#sudama"],
-    "ant": ["#श्रीकृष्ण", "#कृष्णभक्ति", "#shrikrishna"],
+HASHTAG_SUBJECT = {
+    "bal_leela": ["#बाललीला", "#कान्हा", "#गोकुल", "#कृष्णजन्म", "#ladduGopal"],
+    "vrindavan": ["#वृंदावन", "#राधाकृष्ण", "#राधे", "#गोवर्धन", "#radhakrishna"],
+    "gita": ["#गीता", "#भगवद्गीता", "#गीताज्ञान", "#bhagavadgita", "#गीतासार"],
+    "mahabharat": ["#महाभारत", "#mahabharat", "#द्रौपदी", "#अर्जुन", "#कुरुक्षेत्र"],
+    "dwarka": ["#द्वारकाधीश", "#सुदामा", "#मथुरा", "#रुक्मिणी", "#dwarka"],
+    "bhakti": ["#भक्तिकथा", "#राधेराधे", "#जयश्रीकृष्ण", "#हरेकृष्ण", "#bhakti"],
 }
 
-HASHTAG_DEVOTION = [
-    "#राधेराधे", "#जयश्रीकृष्ण", "#हरेकृष्ण", "#कृष्णभक्ति", "#भक्ति",
-    "#radheradhe", "#jaishreekrishna", "#harekrishna", "#bhakti", "#devotional",
+HASHTAG_EMOTION = [
+    "#प्रेरणा", "#सीख", "#जीवनसीख", "#motivation", "#प्रेरणादायक",
+    "#अध्यात्म", "#सत्य", "#धर्म", "#शांति", "#विश्वास",
 ]
 
 HASHTAG_DISCOVERY = [
-    "#कथा", "#प्रेरणा", "#जीवनकीसीख", "#सनातन", "#धर्म",
-    "#motivation", "#lifelesson", "#hindistory", "#spiritual", "#sanatandharma",
+    "#हिंदीकहानी", "#कथा", "#storytime", "#हिंदी", "#पौराणिककथा",
+    "#sanatandharma", "#भारत", "#shortsfeed", "#shortsviral", "#ytshorts",
+    "#हिंदीकथा", "#धर्म", "#krishnalove", "#radhekrishna", "#jaishreekrishna",
+    "#हरेकृष्ण", "#मंदिर", "#आस्था", "#indianmythology", "#devotional",
 ]
 
+# NOTE ON "PUT EVERY VIRAL HASHTAG ON IT"
+# ---------------------------------------
+# Two hard limits make maximising the COUNT counter-productive:
+#
+#   1. YouTube ignores ALL hashtags on a video that carries more than 15. So 30
+#      hashtags does not mean triple the reach - it means ZERO working hashtags.
+#      build_hashtags() is therefore capped at 14, which uses nearly the whole
+#      usable budget with one slot of headroom.
+#
+#   2. Hashtags are a TARGETING signal, not a lottery ticket. Generic tags like
+#      #viral or #funny on a Krishna katha tell YouTube to test the video against
+#      an audience that did not come for devotional content. Those viewers swipe
+#      immediately, the video's early retention drops, and that weak signal
+#      follows it - so an irrelevant "viral" tag actively reduces reach instead of
+#      adding to it. Broad-but-relevant discovery tags (#shortsviral, #ytshorts,
+#      #devotional) are kept; pure bait like #viral, #funny and #memes is not.
+#
+# Reach on this niche comes from the hook, the first frame and retention, which is
+# where the flash text, thumbnail and 24-move motion engine are aimed.
 
-def build_hashtags(theme=None, rng=None, count=None):
-    """Per-video hashtag set. Core first, then theme, devotion, discovery."""
+
+def build_hashtags(subject=None, rng=None, count=9):
+    """Per-video hashtag set.
+
+    Capped below 15 because YouTube ignores ALL hashtags on a video carrying
+    more than 15 - an easy way to accidentally have none work at all.
+    """
     rng = rng or random
-    if count is None:
-        count = int(get_cfg("seo.hashtag_count", 9))
-    theme = theme or DEFAULT_THEME
-    tags = list(HASHTAG_CORE)
-    pool_theme = list(HASHTAG_THEME.get(theme, []))
-    rng.shuffle(pool_theme)
-    tags.extend(pool_theme[:2])
+    subject = subject or DEFAULT_SUBJECT
+    count = max(3, min(int(count), 14))
 
-    devotion = list(HASHTAG_DEVOTION)
-    discovery = list(HASHTAG_DISCOVERY)
-    rng.shuffle(devotion)
-    rng.shuffle(discovery)
-    tags.extend(devotion[:2])
-    tags.extend(discovery[:3])
+    tags = list(HASHTAG_CORE[:3])
+    subj = list(HASHTAG_SUBJECT.get(subject, HASHTAG_SUBJECT[DEFAULT_SUBJECT]))
+    rng.shuffle(subj)
+    tags += subj[:3]
+
+    extras = list(HASHTAG_EMOTION) + list(HASHTAG_DISCOVERY)
+    rng.shuffle(extras)
+    for tag in extras:
+        if len(tags) >= count:
+            break
+        if tag not in tags:
+            tags.append(tag)
 
     out = []
-    for t in tags:
-        if t not in out:
-            out.append(t)
-        if len(out) >= count:
-            break
-    return out
+    for tag in tags:
+        if tag not in out:
+            out.append(tag)
+    return out[:count]
 
 
 # ==========================================================================
 # Tags
 # ==========================================================================
 TAG_EVERGREEN = [
-    "krishna katha", "कृष्ण कथा", "krishna story hindi", "श्रीकृष्ण कथा",
-    "krishna leela", "कृष्ण लीला", "hindi moral story", "प्रेरणादायक कहानी",
-    "bhakti story", "krishna motivational", "जीवन की सीख",
+    "कृष्ण कथा", "krishna story in hindi", "श्रीकृष्ण", "krishna", "भक्ति कथा",
+    "hindi moral story", "प्रेरणादायक कहानी", "कृष्ण उपदेश", "sanatan dharma",
+    "hindi story", "कृष्ण की कहानी", "krishna leela",
 ]
 
-TAG_THEME = {
-    "janm": ["krishna janam katha", "कृष्ण जन्म", "janmashtami story", "devaki vasudev"],
-    "gokul": ["bal krishna", "बाल कृष्ण", "makhan chor", "yashoda krishna", "krishna bal leela"],
-    "vrindavan": ["radha krishna story", "राधा कृष्ण", "vrindavan katha", "krishna murli", "gopi krishna"],
-    "govardhan": ["govardhan leela", "गोवर्धन पूजा", "indra krishna", "giriraj katha"],
-    "mathura": ["kans vadh", "कंस वध", "mathura katha", "akrur krishna"],
-    "dwarka": ["dwarkadhish", "द्वारका", "rukmini krishna", "jarasandh"],
-    "kurukshetra": ["mahabharat katha", "महाभारत", "arjun krishna", "draupadi krishna", "karn katha"],
-    "gita": ["bhagavad gita", "भगवद गीता", "gita gyan", "gita updesh", "गीता सार", "krishna gyan"],
-    "sudama": ["krishna sudama", "कृष्ण सुदामा", "sachi mitrata", "sudama charitra"],
-    "ant": ["krishna ant", "उद्धव गीता", "krishna prabhas", "shri krishna katha"],
+TAG_SUBJECT = {
+    "bal_leela": [
+        "कृष्ण बाल लीला", "bal krishna", "कान्हा की कहानी", "krishna janmashtami",
+        "यशोदा कृष्ण", "गोकुल कथा", "makhan chor", "कृष्ण जन्म कथा",
+    ],
+    "vrindavan": [
+        "वृंदावन कथा", "राधा कृष्ण", "radha krishna story", "गोवर्धन लीला",
+        "कालिया नाग", "बांसुरी", "vrindavan", "राधे राधे",
+    ],
+    "gita": [
+        "भगवद गीता", "bhagavad gita in hindi", "गीता उपदेश", "गीता सार",
+        "गीता ज्ञान", "krishna arjun", "कर्म योग", "gita saar",
+    ],
+    "mahabharat": [
+        "महाभारत कथा", "mahabharat story", "द्रौपदी", "कर्ण", "अभिमन्यु",
+        "बर्बरीक", "कुरुक्षेत्र", "mahabharat in hindi",
+    ],
+    "dwarka": [
+        "सुदामा चरित्र", "sudama krishna", "द्वारका", "रुक्मिणी विवाह",
+        "मथुरा कथा", "कंस वध", "dwarkadhish",
+    ],
+    "bhakti": [
+        "भक्ति", "उद्धव गीता", "कृष्ण भजन कथा", "आध्यात्मिक कहानी",
+        "जय श्री कृष्ण", "hare krishna", "राधे राधे",
+    ],
 }
 
-TAGS_CHAR_BUDGET = 480   # a little under 500 so the API never 400s
-TAG_MAX_LEN = 60
+TAGS_CHAR_BUDGET = 460  # under YouTube's 500-char total so the API never 400s
+TAG_MAX_LEN = 60        # one overlong tag just burns budget
 
 
 def _normalise_tag(tag):
-    t = " ".join(str(tag or "").split()).strip().lower()
-    t = t.replace('"', "").replace(",", " ")
-    return " ".join(t.split())
+    return " ".join(str(tag or "").replace(",", " ").split()).strip()
 
 
-def build_tags(core_title="", keywords=None, theme=None, lesson="", rng=None, extra=None):
-    """Build a tag list that fits inside YouTube's total character budget.
+def build_tags(core_title="", keywords=None, subject=None, rng=None, extra=None):
+    """Per-video tag list, ordered most specific first and budget-capped.
 
-    YouTube counts the COMBINED length of all tags against ~500 characters and
-    rejects the request outright if it overflows, so tags are added in priority
-    order and the list stops when the budget is spent -- rather than sending a
-    long list and getting a 400.
+    Specific first matters because the budget cuts from the end: if the generic
+    "hindi story" tags led, the leela-specific ones would be the ones dropped.
     """
     rng = rng or random
-    theme = theme or detect_leela(core_title, "", keywords, lesson)
+    subject = subject or detect_subject(core_title, "", keywords)
 
     ordered = []
-    ordered.extend(TAG_THEME.get(theme, []))
-    ordered.extend(TAG_EVERGREEN)
-    for k in (keywords or []):
-        ordered.append(k)
-    for e in (extra or []):
-        ordered.append(e)
+
+    # Leela-specific first.
+    subj = list(TAG_SUBJECT.get(subject, TAG_SUBJECT[DEFAULT_SUBJECT]))
+    rng.shuffle(subj)
+    ordered += subj
+
+    # Then anything meaningful from the title.
     core = _clean_core(core_title)
     if core:
         ordered.append(core)
 
+    # Then the anchors for this leela (real search phrases).
+    ordered += list(SEARCH_ANCHORS.get(subject, []))[:3]
+
+    # Then any caller extras and the atmosphere keywords.
+    for item in (extra or []):
+        ordered.append(item)
+    for item in (keywords or []):
+        ordered.append(item)
+
+    # Evergreen last - dropped first if the budget runs out.
+    ever = list(TAG_EVERGREEN)
+    rng.shuffle(ever)
+    ordered += ever
+
     out = []
-    used = 0
     seen = set()
+    used = 0
     for raw in ordered:
         tag = _normalise_tag(raw)
-        if not tag or len(tag) > TAG_MAX_LEN or tag in seen:
+        if not tag or len(tag) > TAG_MAX_LEN:
             continue
-        if used + len(tag) > TAGS_CHAR_BUDGET:
+        key = tag.lower()
+        if key in seen:
             continue
-        seen.add(tag)
+        # +1 for the comma YouTube counts between tags.
+        cost = len(tag) + 1
+        if used + cost > TAGS_CHAR_BUDGET:
+            continue
+        seen.add(key)
         out.append(tag)
-        used += len(tag)
+        used += cost
     return out
 
 
 # ==========================================================================
 # Description
 # ==========================================================================
-# The first ~100 characters are what appears in search results, so the opener
-# carries the topic in plain Hindi rather than a greeting.
 DESC_OPENERS = [
-    "श्रीकृष्ण की एक ऐसी कथा, जिसकी सीख आज भी हर घर में काम आती है।",
-    "भगवान श्रीकृष्ण के जीवन का एक प्रसंग और उससे मिलने वाली गहरी सीख।",
-    "कृष्ण कथा: एक छोटा प्रसंग, एक बड़ी सीख।",
-    "ये कथा सुनने के बाद आपका नज़रिया बदल जाएगा।",
-    "श्रीकृष्ण की लीला और उसमें छिपा जीवन का सबक।",
-    "कृष्ण की एक सीख, जो आज के समय में और ज़्यादा ज़रूरी है।",
-    "एक कथा, एक सीख — श्रीकृष्ण के जीवन से।",
-    "भगवद गीता और कृष्ण लीला की सरल भाषा में कथा।",
-    "श्रीकृष्ण के जीवन का वो प्रसंग जो हमें बहुत कुछ सिखाता है।",
-    "कृष्ण कथा जो मन को शांति और दिशा दोनों देती है।",
-    "ये प्रसंग छोटा है, पर इसकी सीख बहुत बड़ी है।",
-    "श्रीकृष्ण की कथा, आज के जीवन से जोड़कर।",
-    "कन्हैया की एक लीला और उसमें छिपा उत्तर।",
-    "गीता का सार, एक कथा के ज़रिए।",
-    "कृष्ण ने जो सिखाया, वो किताबों में नहीं मिलता।",
-    "एक प्रसंग जो हर माता-पिता को सुनना चाहिए।",
-    "श्रीकृष्ण की कथाओं में जीवन के सारे उत्तर हैं।",
-    "आज की कथा: श्रीकृष्ण और एक ज़रूरी सीख।",
+    "आज की कथा:",
+    "सुनिए एक कथा:",
+    "श्रीकृष्ण की एक लीला:",
+    "एक छोटी कथा, एक बड़ी सीख:",
+    "आज की सीख:",
+    "कान्हा की एक लीला:",
+    "ये कथा ध्यान से सुनिए:",
+    "एक प्रसंग:",
+    "आज का प्रसंग:",
+    "एक कथा जो सोच बदल देती है:",
+    "कृष्ण कथा:",
+    "सुनिए और सोचिए:",
+    "आज की कृष्ण कथा:",
+    "एक लीला, एक सीख:",
+    "ये बात याद रखने वाली है:",
+    "श्रीकृष्ण कहते हैं:",
+    "एक कथा आपके लिए:",
+    "आज की भक्ति कथा:",
+    "एक कथा जो बार-बार याद आती है:",
+    "आज सुनिए ये प्रसंग:",
+    "श्रीकृष्ण की एक अनसुनी बात:",
+    "ये कथा हर किसी को पता होनी चाहिए:",
+    "एक छोटी घटना, बड़ी सीख:",
+    "सुनिए, और ठहर कर सोचिए:",
+    "आज का प्रसंग कुछ खास है:",
+    "कान्हा की एक और लीला:",
+    "ये कथा दिल को छू जाती है:",
+    "एक सवाल का जवाब इस कथा में है:",
+    "श्रीकृष्ण ने क्या सिखाया, सुनिए:",
+    "आज की कथा और उसकी सीख:",
+    "एक प्रसंग जो सोच बदल देता है:",
+    "सुनिए ये पुरानी कथा:",
+    "कान्हा का एक और रूप:",
+    "आज की बात ध्यान से सुनिए:",
+    "एक कथा, एक जवाब:",
+    "श्रीकृष्ण की लीला और उसका अर्थ:",
+    "ये प्रसंग आपके काम आएगा:",
+    "आज सुनिए कान्हा की ये कथा:",
+    "एक कथा जो शांति देती है:",
+    "श्रीकृष्ण की सीख, आसान शब्दों में:",
 ]
 
 DESC_QUESTIONS = [
-    "आपको ये सीख कैसी लगी? कमेंट में बताइए।",
-    "आप उस जगह होते तो क्या करते? कमेंट में लिखिए।",
+    "आपको इस कथा से क्या सीख मिली? कमेंट में लिखिए।",
+    "आप इस बारे में क्या सोचते हैं? नीचे बताइए।",
+    "क्या आपने ये कथा पहले सुनी थी? कमेंट कीजिए।",
+    "इस सीख में से कौन सी बात आपको सबसे अच्छी लगी?",
+    "कमेंट में जय श्री कृष्ण लिखिए।",
+    "आपके जीवन में ये सीख कब काम आई? बताइए।",
     "अगली कथा किस लीला पर चाहिए? कमेंट कीजिए।",
-    "क्या आप इस सीख से सहमत हैं?",
-    "इस कथा ने आपको किसकी याद दिलाई?",
-    "आपकी सबसे प्रिय कृष्ण लीला कौन सी है?",
-    "कमेंट में लिखिए — राधे राधे।",
-    "ये सीख किसे भेजनी चाहिए? उन्हें टैग कीजिए।",
-    "आपने ये कथा पहले सुनी थी?",
-    "गीता की कौन सी बात आपके सबसे काम आई?",
-    "क्या आज भी ये बात लागू होती है? बताइए।",
-    "इस प्रसंग पर पूरी कथा चाहिए? कमेंट कीजिए।",
-    "आपके घर में ये कथा कौन सुनाता था?",
-    "इनमें से कौन सी सीख सबसे कठिन लगती है?",
-    "बोलिए — जय श्री कृष्ण।",
-    "आपको कौन सा हिस्सा सबसे अच्छा लगा?",
-    "क्या ये सीख बच्चों को सिखानी चाहिए?",
-    "कमेंट में अपनी राय ज़रूर लिखिए।",
+    "क्या आप इस बात से सहमत हैं? कमेंट में लिखिए।",
+    "कमेंट में राधे राधे लिखकर बताइए।",
+    "इस कथा का कौन सा हिस्सा दिल को छू गया?",
+    "आप कहाँ से सुन रहे हैं? कमेंट में शहर का नाम लिखिए।",
+    "ये सीख किसे भेजना चाहेंगे? टैग कीजिए।",
+    "आपकी सबसे पसंदीदा कृष्ण लीला कौन सी है?",
+    "क्या ये बात आज भी लागू होती है? बताइए।",
+    "अगर सहमत हैं तो एक कमेंट कर दीजिए।",
+    "कमेंट में हरे कृष्ण लिखिए।",
+    "आपको कान्हा की कौन सी बात सबसे अच्छी लगती है?",
+    "इस पर आपकी राय क्या है? नीचे लिखिए।",
+    "क्या आपने गीता पढ़ी है? कमेंट में बताइए।",
+    "आपका आज का दिन कैसा जा रहा है? बताइए।",
+    "अगली सीख के लिए क्या सुनना चाहेंगे?",
+    "ये कथा किसे याद दिलाना चाहेंगे?",
+    "कमेंट में एक शब्द लिखिए — कृष्ण।",
+    "आपके घर में कौन सी कथा सबसे ज़्यादा सुनाई जाती है?",
+    "आपने ये कथा पहले कहाँ सुनी थी? कमेंट कीजिए।",
+    "इस सीख को एक लाइन में अपने शब्दों में लिखिए।",
+    "कान्हा की कौन सी लीला आपको सबसे प्यारी लगती है?",
+    "क्या आप रोज़ कृष्ण कथा सुनते हैं? बताइए।",
+    "इस कथा में सबसे अच्छा हिस्सा कौन सा था?",
+    "आप किस शहर से सुन रहे हैं? कमेंट कीजिए।",
+    "कमेंट में जय कन्हैया लाल की लिखिए।",
+    "ये सीख आपके किस काम आएगी? बताइए।",
+    "अगर सहमत हैं तो एक ❤️ कमेंट कीजिए।",
+    "आपके परिवार में ये कथा कौन सुनाता था?",
+    "क्या ये बात आज भी लागू होती है? कमेंट कीजिए।",
+    "कमेंट में राधे कृष्णा लिखिए।",
+    "आपको कौन सी सीख सबसे ज़्यादा छू गई?",
+    "इस कथा पर आपकी राय क्या है? लिखिए।",
+    "अगली बार कौन सी लीला सुनाऊँ? बताइए।",
+    "क्या आपने कभी ऐसा अनुभव किया है? कमेंट कीजिए।",
 ]
 
 DESC_CTAS = [
-    "रोज़ ऐसी कथाओं के लिए चैनल सब्सक्राइब कीजिए।",
-    "हर दिन एक नई कृष्ण कथा — सब्सक्राइब कर लीजिए।",
-    "अगर अच्छा लगा तो लाइक और सब्सक्राइब कीजिए।",
-    "कृष्ण कथाओं की रोज़ की खुराक — सब्सक्राइब कीजिए।",
-    "चैनल से जुड़ जाइए, कल फिर एक नई कथा।",
-    "ऐसी सीखों के लिए बेल आइकन दबा दीजिए।",
-    "सब्सक्राइब कीजिए और कोई कथा मिस न कीजिए।",
-    "परिवार के साथ शेयर कीजिए और चैनल फॉलो कीजिए।",
-    "रोज़ पाँच नई कथाएँ — सब्सक्राइब कर लीजिए।",
-    "जय श्री कृष्ण। चैनल सब्सक्राइब कीजिए।",
-    "अगर मन को शांति मिली तो सब्सक्राइब कीजिए।",
-    "गीता और कृष्ण लीला रोज़ — सब्सक्राइब कीजिए।",
+    "ऐसी ही कथाओं के लिए चैनल को Subscribe कर लीजिए।",
+    "रोज़ एक नई कथा के लिए Subscribe कीजिए और घंटी दबा दीजिए।",
+    "अगर अच्छा लगा तो Like और Subscribe कर दीजिए।",
+    "कृष्ण कथाएँ रोज़ पाने के लिए Subscribe कीजिए।",
+    "चैनल Subscribe करके हमारा साथ दीजिए।",
+    "और कथाएँ आ रही हैं — Subscribe कर लीजिए।",
+    "इस कथा को अपनों के साथ शेयर कीजिए।",
+    "Subscribe कीजिए, रोज़ एक सीख मिलेगी।",
+    "अगर दिल को छुआ तो Like कीजिए और चैनल Subscribe कर लीजिए।",
+    "जय श्री कृष्ण। चैनल से जुड़े रहिए।",
+    "राधे राधे। Subscribe करके साथ बने रहिए।",
+    "नई कथा छूट न जाए — Subscribe करके घंटी दबा दीजिए।",
+    "एक Share किसी का दिन बदल सकता है।",
+    "Subscribe करके इस परिवार का हिस्सा बनिए।",
+    "हरे कृष्ण। रोज़ मिलते हैं एक नई कथा के साथ।",
+    "अगर सीख काम की लगी तो शेयर कीजिए।",
+    "Like, Share और Subscribe — बस इतना ही।",
+    "अगली कथा के लिए जुड़े रहिए।",
+    "रोज़ एक कथा चाहिए तो Subscribe कर लीजिए।",
+    "कान्हा की और कथाओं के लिए Subscribe कीजिए।",
+    "अगर ये सीख काम की लगी तो Share कीजिए।",
+    "Subscribe करके घंटी दबा दीजिए, कोई कथा नहीं छूटेगी।",
+    "जय कन्हैया लाल की। Subscribe करके साथ दीजिए।",
+    "ये कथा किसी अपने को Share कीजिए।",
+    "और गहरी कथाएँ आ रही हैं — Subscribe कीजिए।",
+    "अगर मन शांत हुआ तो Like और Subscribe कीजिए।",
+    "राधे राधे। Subscribe करके जुड़े रहिए।",
+    "अगली कथा और भी सुंदर है — Subscribe कर लीजिए।",
+    "Subscribe कीजिए, रोज़ एक सीख आपके पास आएगी।",
+    "इस कथा को अपने बच्चों को भी सुनाइए, और चैनल Subscribe कीजिए।",
+    "हरे कृष्ण। चैनल Subscribe करके साथ चलिए।",
+    "एक Share से ये कथा किसी और तक पहुँच जाएगी।",
+    "अगर अंत तक सुना तो Subscribe ज़रूर कीजिए।",
+    "जय श्री कृष्ण। Subscribe करके परिवार का हिस्सा बनिए।",
+    "और कथाएँ सुनने के लिए Follow कर लीजिए।",
+    "अगर दिल को अच्छा लगा तो Share कीजिए।",
+    "Subscribe कीजिए और रोज़ एक कथा सुनिए।",
+    "राधे राधे। साथ बने रहिए, कथाएँ जारी हैं।",
+    "इस कथा को Share कीजिए, किसी का दिन बन जाएगा।",
+    "Subscribe करके अगली कथा का इंतज़ार कीजिए।",
 ]
 
 DESC_ABOUT = [
-    "इस चैनल पर भगवान श्रीकृष्ण के जन्म से लेकर उनके जीवन के अंतिम प्रसंगों तक "
-    "की कथाएँ सरल हिंदी में सुनाई जाती हैं — हर कथा के साथ एक साफ़ सीख।",
-    "यहाँ आपको बाल लीला, वृंदावन, मथुरा, द्वारका, महाभारत और भगवद गीता — "
-    "श्रीकृष्ण के जीवन का हर पड़ाव कथा रूप में मिलेगा।",
-    "श्रीकृष्ण की लीलाएँ और गीता का ज्ञान, रोज़ की भाषा में, रोज़ की ज़िंदगी के लिए।",
-    "कृष्ण कथा, गीता उपदेश और जीवन की सीख — सब एक जगह, सरल हिंदी में।",
+    "इस चैनल पर भगवान श्रीकृष्ण के जीवन की लीलाएँ और उनसे मिलने वाली सीख सरल हिंदी में सुनाई जाती है।",
+    "यहाँ आपको श्रीकृष्ण की बाल लीला से लेकर गीता के उपदेश तक, हर कथा छोटी और सरल भाषा में मिलेगी।",
+    "कृष्ण कथा, महाभारत के प्रसंग और गीता की सीख — रोज़ एक नई कथा, आसान हिंदी में।",
+    "बच्चों और बड़ों, दोनों के लिए — श्रीकृष्ण की कथाएँ और जीवन में काम आने वाली सीख।",
+    "श्रीकृष्ण की लीलाएँ, महाभारत के प्रसंग और भगवद गीता का सार — छोटी कथाओं में।",
 ]
 
+# Stated openly rather than hidden. Undisclosed synthetic narration and imagery
+# is a disclosure problem on YouTube, and being upfront costs nothing while
+# removing a genuine review risk on a channel of this type.
 PRODUCTION_NOTE = (
-    "नोट: इस वीडियो के दृश्य AI की सहायता से बनाए गए हैं और कुछ प्राकृतिक "
-    "फुटेज Pexels से लिया गया है। कथा शास्त्रों में वर्णित प्रसंगों पर आधारित है।"
+    "नोट: ये कथाएँ प्रचलित पौराणिक कथाओं पर आधारित हैं। दृश्य और आवाज़ "
+    "AI की सहायता से बनाए गए हैं। किसी की भावनाओं को ठेस पहुँचाने का "
+    "उद्देश्य नहीं है।"
 )
 
 
-def _teaser(text, max_chars=140):
-    """One line of the katha itself, skipping the randomly drawn hook sentence.
+# Minimum length for the description's first line. Only the opening ~100 chars
+# show in search results and above the "...more" fold, so a short first line
+# throws away the single most valuable piece of description real estate.
+FIRST_LINE_TARGET = 78
 
-    The old pipeline pasted the ENTIRE narration into the description. That
-    duplicated the audio as text on every single video, which reads as
-    auto-generated and gives the ranking system nothing it does not already have
-    from the captions.
+
+def _teaser(text, max_chars=160):
+    """A short teaser from the STORY, skipping the randomly drawn hook sentence.
+
+    The first sentence is a rotating hook, so including it would make many
+    descriptions open on the same line - the exact thing this module exists to
+    prevent.
     """
     body = _strip_hook_sentence(text)
+    body = " ".join(str(body or "").split())
     if not body:
         return ""
-    parts = re.split(r"(?<=[।.!?])\s+", body)
-    out = ""
-    for p in parts:
-        p = p.strip()
-        if not p:
-            continue
-        if len(out) + len(p) + 1 > max_chars:
-            break
-        out = (out + " " + p).strip()
-    if not out:
-        out = body[:max_chars].rsplit(" ", 1)[0]
-    return out
+    if len(body) <= max_chars:
+        return body
+    cut = body[:max_chars]
+    for sep in ("। ", ". ", ", "):
+        idx = cut.rfind(sep)
+        if idx > max_chars * 0.5:
+            return cut[: idx + 1].strip()
+    return cut.rsplit(" ", 1)[0] + "..."
 
 
-def build_description(core_title, text="", keywords=None, theme=None, lesson="",
-                      hashtags=None, rng=None):
-    """Assemble the per-video description."""
+def build_description(core_title, text="", seekh="", subject=None, hashtags=None,
+                      keywords=None, rng=None):
+    """Assemble the video description.
+
+    Structure is deliberate: the searchable line comes FIRST because only the
+    opening ~100 characters show in search results and above the "more" fold.
+    """
     rng = rng or random
-    theme = theme or detect_leela(core_title, text, keywords, lesson)
-    if hashtags is None:
-        hashtags = build_hashtags(theme, rng=rng)
+    subject = subject or detect_subject(core_title, text, keywords)
+    anchors = SEARCH_ANCHORS.get(subject) or SEARCH_ANCHORS[DEFAULT_SUBJECT]
+    anchor = rng.choice(list(anchors))
 
-    opener = history.pick("desc_openers", DESC_OPENERS)
-    question = history.pick("desc_questions", DESC_QUESTIONS)
-    cta = history.pick("desc_ctas", DESC_CTAS)
-    about = rng.choice(DESC_ABOUT)
-    channel_url = get_cfg("seo.channel_url", "")
+    opener = history.pick("desc_openers", list(DESC_OPENERS)) or DESC_OPENERS[0]
+    question = history.pick("desc_questions", list(DESC_QUESTIONS)) or DESC_QUESTIONS[0]
+    cta = history.pick("desc_ctas", list(DESC_CTAS)) or DESC_CTAS[0]
+    about = rng.choice(list(DESC_ABOUT))
 
-    blocks = [opener]
-
+    core = _clean_core(core_title)
     teaser = _teaser(text)
+
+    # A SECOND anchor goes on the first line too. Hindi is far more compact than
+    # English - the same sentence is ~30% fewer characters - so a single-anchor
+    # opener produced a search snippet of barely 50 characters, which wastes the
+    # only part of the description that shows in search results and above the
+    # "...more" fold. Two anchors fill that line with real query surface instead
+    # of padding it.
+    # Pad the first line with GENERIC anchors, never with the leela-specific
+    # ones. Padding from SEARCH_ANCHORS looked fine until a Kaliya-naag video
+    # came out carrying "गोवर्धन कथा" in its opening line - a real, different
+    # leela that the video does not tell. That is misleading to a viewer and
+    # reads as keyword stuffing to YouTube. The generic phrases are true of every
+    # video on the channel, so they can pad safely.
+    padding = [a for a in GENERIC_ANCHORS if a != anchor]
+    rng.shuffle(padding)
+
+    parts = []
+    first = f"{opener} {core} — {anchor}"
+    for extra in padding:
+        if len(first) >= FIRST_LINE_TARGET:
+            break
+        first += f" | {extra}"
+    parts.append(first)
     if teaser:
-        blocks.append(teaser)
+        parts.append("")
+        parts.append(teaser)
+    if seekh:
+        parts.append("")
+        parts.append(f"सीख: {str(seekh).strip().rstrip('।')}।")
+    parts.append("")
+    parts.append(question)
+    parts.append("")
+    parts.append(cta)
 
-    if lesson:
-        blocks.append("सीख: %s" % str(lesson).strip().rstrip("।") + "।")
-
-    blocks.append(question)
-    blocks.append(cta)
+    channel_url = get_cfg("seo.channel_url", "")
     if channel_url:
-        blocks.append("चैनल: %s" % channel_url)
-    blocks.append(about)
+        parts.append(channel_url)
 
-    kws = [str(k) for k in (keywords or []) if str(k).strip()][:5]
-    if kws:
-        blocks.append("इस कथा में: " + ", ".join(kws))
+    parts.append("")
+    parts.append(about)
+    parts.append("")
+    parts.append(PRODUCTION_NOTE)
 
-    blocks.append(PRODUCTION_NOTE)
-    blocks.append(" ".join(hashtags))
+    if hashtags:
+        parts.append("")
+        parts.append(" ".join(hashtags))
 
-    return "\n\n".join(b for b in blocks if b)
+    return "\n".join(parts).strip()
 
 
 # ==========================================================================
 # Pinned comment
 # ==========================================================================
-# Printed into the run log for manual pinning. Comment velocity in the first hour
-# is a strong signal and viewers rarely start a thread themselves, so the channel
-# owner posts the first one. Posting it automatically is not possible with the
-# youtube.upload scope this pipeline uses.
+# Posted manually: the upload token carries only the youtube.upload scope, which
+# cannot write comments, and there is no API to PIN one at all. generate.py logs
+# the suggested text so it can be pasted in seconds.
 PINNED_COMMENTS = [
-    "आपकी सबसे प्रिय कृष्ण लीला कौन सी है? नीचे लिखिए 👇",
-    "बोलिए — जय श्री कृष्ण 🙏 और अगली कथा का विषय बताइए।",
-    "आप उस जगह होते तो क्या करते? ईमानदारी से बताइए 👇",
-    "ये सीख किसे भेजनी चाहिए? उनका नाम लिखिए 👇",
-    "राधे राधे 🙏 आपको ये कथा कैसी लगी?",
-    "गीता की कौन सी बात आपके सबसे ज़्यादा काम आई? 👇",
-    "इस प्रसंग पर पूरी कथा चाहिए? कमेंट में 'हाँ' लिखिए।",
-    "आपके घर में बचपन में ये कथा कौन सुनाता था? 👇",
-    "क्या आज भी ये बात लागू होती है? आपकी राय 👇",
-    "अगली कथा — गोकुल, महाभारत या गीता? आप चुनिए 👇",
-    "एक शब्द में बताइए, इस कथा से क्या सीखा? 👇",
-    "जय कन्हैया लाल की 🙏 कल कौन सी लीला सुनना चाहेंगे?",
-    "इस सीख को अपने बच्चों को सुनाइएगा? बताइए 👇",
-    "आपको कौन सा हिस्सा सबसे अच्छा लगा? 👇",
-    "हरे कृष्ण 🙏 आपका पसंदीदा कृष्ण मंत्र कौन सा है?",
-    "क्या ये कथा आपने पहले सुनी थी? हाँ या नहीं 👇",
-    "कृष्ण की कौन सी सीख आपको सबसे कठिन लगती है? 👇",
-    "इस कथा ने आपको किसकी याद दिलाई? 👇",
-    "जय द्वारकाधीश 🙏 अगली कथा का विषय आप बताइए।",
-    "आपके शहर से राधे राधे लिखिए 👇",
+    "आपको इस कथा से क्या सीख मिली? कमेंट में लिखिए 👇",
+    "कमेंट में जय श्री कृष्ण लिखिए 🙏",
+    "आपकी सबसे पसंदीदा कृष्ण लीला कौन सी है? बताइए 👇",
+    "क्या आप इस सीख से सहमत हैं? हाँ या ना 👇",
+    "कमेंट में राधे राधे लिखकर आशीर्वाद लीजिए 🙏",
+    "अगली कथा किस पर चाहिए? कमेंट कीजिए 👇",
+    "आप कहाँ से सुन रहे हैं? शहर का नाम लिखिए 👇",
+    "ये सीख किसे भेजना चाहेंगे? टैग कीजिए 👇",
+    "कमेंट में हरे कृष्ण लिखिए 🙏",
+    "इस कथा का कौन सा हिस्सा दिल को छू गया? 👇",
+    "आपके जीवन में ये सीख कब काम आई? बताइए 👇",
+    "क्या आपने ये कथा पहले सुनी थी? हाँ या ना 👇",
+    "कमेंट में एक शब्द लिखिए — कृष्ण 🦚",
+    "गीता की कौन सी बात आपको सबसे अच्छी लगती है? 👇",
+    "अगर दिल को छुआ तो एक 🙏 कमेंट कर दीजिए",
+    "आज का दिन कैसा जा रहा है? बताइए 👇",
+    "आपके घर में कौन सी कथा सबसे ज़्यादा सुनाई जाती है? 👇",
+    "कमेंट में जय कन्हैया लाल की लिखिए 🙏",
+    "ये बात आपको कैसी लगी? एक लाइन में लिखिए 👇",
+    "किस लीला पर अगली कथा बनाऊँ? कमेंट कीजिए 👇",
+    "अगर सहमत हैं तो ❤️ कमेंट कीजिए",
+    "आपका पसंदीदा कृष्ण नाम कौन सा है? 👇",
+    "क्या आप रोज़ कृष्ण कथा सुनते हैं? बताइए 👇",
+    "कमेंट में राधे कृष्णा लिखिए 🦚",
+    "इस सीख को एक लाइन में अपने शब्दों में लिखिए 👇",
+    "आपको कान्हा की कौन सी बात सबसे प्यारी लगती है? 👇",
+    "कमेंट में अपना नाम और जय श्री कृष्ण लिखिए 🙏",
+    "अगर काम की बात लगी तो शेयर कीजिए और कमेंट कीजिए 👇",
+    "आप किस उम्र से कृष्ण कथा सुन रहे हैं? 👇",
+    "क्या आपको ये कथा पहले से पता थी? हाँ या ना 👇",
+    "आपके परिवार में ये कथा कौन सुनाता था? 👇",
+    "ये कथा किसे भेजना चाहेंगे? टैग कीजिए 👇",
+    "आपको कौन सी सीख सबसे ज़्यादा छू गई? 👇",
+    "अगली कथा किस लीला पर बनाऊँ? कमेंट कीजिए 👇",
+    "अगर सहमत हैं तो एक 🙏 कमेंट कर दीजिए",
+    "आप किस शहर से सुन रहे हैं? नाम लिखिए 👇",
+    "क्या आपने कभी ऐसा अनुभव किया है? बताइए 👇",
 ]
 
 
 def build_pinned_comment(rng=None):
-    return history.pick("pinned_comments", PINNED_COMMENTS)
+    return history.pick("pinned", list(PINNED_COMMENTS)) or PINNED_COMMENTS[0]
 
 
 # ==========================================================================
-# One-call bundle
+# Public API
 # ==========================================================================
-def build_metadata(core_title, text="", keywords=None, lesson="", rng=None):
-    """Return the complete metadata bundle for one reel."""
+def build_metadata(core_title, text="", keywords=None, rng=None, seekh=""):
+    """Build the complete metadata bundle for one video.
+
+    Returned keys are kept identical to the parent pipeline so generate.py, the
+    uploader, retitle_existing.py and seo_report.py all keep working.
+    """
     rng = rng or random
-    theme = detect_leela(core_title, text, keywords, lesson)
-    title = build_title(core_title, text, keywords, theme=theme, lesson=lesson, rng=rng)
-    hashtags = build_hashtags(theme, rng=rng)
-    tags = build_tags(core_title, keywords, theme=theme, lesson=lesson, rng=rng)
-    description = build_description(
-        core_title, text=text, keywords=keywords, theme=theme,
-        lesson=lesson, hashtags=hashtags, rng=rng,
+    subject = detect_subject(core_title, text, keywords)
+
+    hashtags = build_hashtags(
+        subject=subject, rng=rng, count=int(get_cfg("seo.hashtag_count", 9))
     )
+    title = build_title(core_title, text=text, keywords=keywords, subject=subject, rng=rng)
+    description = build_description(
+        core_title, text=text, seekh=seekh, subject=subject,
+        hashtags=hashtags, keywords=keywords, rng=rng,
+    )
+    tags = build_tags(core_title=core_title, keywords=keywords, subject=subject, rng=rng)
+
     return {
-        # Kept under the key name the rest of the pipeline already reads.
-        "subject": theme,
-        "theme": theme,
+        "subject": subject,
         "youtube_title": title,
         "youtube_description": description,
         "youtube_tags": tags,
         "hashtags": hashtags,
         "pinned_comment": build_pinned_comment(rng=rng),
-        "atmosphere_theme": theme,
     }

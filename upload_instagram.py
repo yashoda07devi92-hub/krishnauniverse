@@ -45,16 +45,16 @@ def _save_manifest(manifest):
 
 
 def _caption(entry):
-    title = entry.get("title", "A KrishnaUniverse Story")
+    title = entry.get("title", "A Krishna Universe Story")
     hashtags = get_cfg(
         "youtube.hashtags",
-        "#shorts #cute #puppy #baby #aww #animals #wholesome #heartwarming",
+        "#कृष्ण #कृष्णकथा #भक्ति #राधेराधे #krishna #hindikahani #भक्तिकथा",
     )
     return f"{title}\n\nFollow Krishna Universe for your daily dose of joy.\n{hashtags}"
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Upload KrishnaUniverse reels to Instagram (optional).")
+    parser = argparse.ArgumentParser(description="Upload Krishna Universe reels to Instagram (optional).")
     parser.add_argument("--limit", type=int, default=1, help="Max reels to upload this run.")
     args = parser.parse_args(argv)
 

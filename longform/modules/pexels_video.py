@@ -20,7 +20,7 @@ import time
 
 from .config import CLIPS_DIR, get_cfg, get_env
 
-log = logging.getLogger("krishnakatha.pexels")
+log = logging.getLogger("krishna.pexels")
 
 PEXELS_VIDEO_SEARCH = "https://api.pexels.com/videos/search"
 _MAX_BODY_LOG = 300

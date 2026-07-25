@@ -1,52 +1,43 @@
-name: Sweet Soul Auto Longform (3-5 min stories)
+name: Krishna Universe Auto Longform (Hindi katha)
 
-# ONE long-form (3-5 min) story, posted roughly EVERY OTHER DAY at US evening
-# prime time. The cadence is no longer limited by GitHub Actions minutes - the
-# repo is public, so those are unlimited - it is limited by the YouTube Data API
-# quota of 10,000 units/day against 1,600 units per upload.
+# ONE long-form Hindi katha, posted roughly EVERY OTHER DAY in the India evening.
+# The cadence is not limited by GitHub Actions minutes - the repo is public, so
+# those are unlimited - it is limited by the YouTube Data API quota of 10,000
+# units/day against 1,600 units per upload.
 #
-# SCHEDULE: DISABLED until this pipeline is ported to Hindi. See the block below.
-#     publishes ~8:39 PM US Eastern in summer, ~7:39 PM in winter
-#     -> inside the 7:00 PM - 1:30 AM US evening prime-time window all year
-#     = 4:11 AM IST
+# SCHEDULE: cron "2 13 * * 1,3,5" = 13:02 UTC every Mon/Wed/Fri
+#     -> publishes ~20:30 IST, the strongest evening window for YouTube India
 #
-# WHY DAY-OF-WEEK INSTEAD OF THE OLD "*/2" (every 2nd day-of-month):
+#   This was NOT simply carried over from the US schedule this pipeline came
+#   from. The inherited cron ("41 22") was aimed at ~8:39 PM US Eastern, which
+#   in IST is 04:09 the next morning - it would have published the channel's
+#   most important video of the week while India was asleep.
+#
+# IST HAS NO DAYLIGHT SAVING, so unlike the US version this cron never needs a
+# seasonal correction.
+#
+# WHY DAY-OF-WEEK INSTEAD OF "*/2" (every 2nd day-of-month):
 #   "*/2" on day-of-month resets at every month boundary, so the 31st and the
 #   1st both match and the job runs on two CONSECUTIVE days ~7 times a year.
-#   Mon/Wed/Fri is predictable, keeps the "roughly every other day" cadence,
-#   and lets the reel workflow reliably skip its 23:27 slot on exactly these
-#   days to stay inside the YouTube API quota (see auto-reel.yml for the math).
+#   Mon/Wed/Fri is predictable, keeps the "roughly every other day" cadence, and
+#   lets the reel workflow reliably skip its 12:25 UTC slot on exactly these days
+#   to stay inside the YouTube API quota (see auto-reel.yml for the math).
 #
-# WHY 22:41 AND NOT THE PUBLISH TIME ITSELF:
-#   The Actions scheduler queues jobs, and the delay is far larger than it looks.
-#   Measured over five consecutive scheduled runs on this repo it averaged
-#   +78 MINUTES (range +64 to +88). On top of that this build renders a 3-5
-#   minute video with AI scene images, so the total lead is set to ~118 minutes.
-#   Verify with `python slot_report.py --longform-only`, which reads the real
-#   publish time off YouTube instead of guessing. Do not shorten this lead
-#   without re-measuring.
+# WHY 13:02 AND NOT 20:30 ITSELF:
+#   The Actions scheduler queues jobs, and the delay is larger than it looks.
+#   Measured over five consecutive scheduled runs it averaged +78 MINUTES (range
+#   +64 to +88). This build also renders a multi-minute video with AI scene
+#   images, so the total lead is set to ~118 minutes. Verify with
+#   `python slot_report.py --longform-only`, which reads the real publish time
+#   off YouTube instead of guessing. Do not shorten this lead without
+#   re-measuring.
 #
 # This workflow lives entirely under the longform/ folder and does NOT touch the
-# KrishnaUniverse reel pipeline or its schedule.
+# reel pipeline or its schedule.
 
 on:
   schedule:
-    # SCHEDULE INTENTIONALLY DISABLED (commented out).
-    #
-    # The Shorts pipeline is fully ported to Hindi Krishna katha; this long-form
-    # pipeline is NOT yet - its story prompt, pools and SEO layer are still the
-    # inherited English "moral stories for kids" versions. Leaving the schedule
-    # live would publish English kids' stories onto a Hindi devotional channel
-    # three times a week, which is worse than publishing nothing: it confuses the
-    # topic model, splits the audience, and is exactly the kind of mismatch that
-    # gets a channel reviewed.
-    #
-    # The cron below is already computed for India night prime (~9:20 PM IST,
-    # 118-minute lead for the slower long-form render) and the reel workflow
-    # already skips its 13:55 slot on Mon/Wed/Fri to leave quota room for it.
-    # Uncomment this ONE line once the Hindi port lands - nothing else changes.
-    #
-    # - cron: "52 13 * * 1,3,5"   # -> publish ~9:20 PM IST (Mon/Wed/Fri)
+    - cron: "2 13 * * 1,3,5"
   workflow_dispatch:
     inputs:
       mode:
@@ -57,9 +48,20 @@ on:
         description: "Upload to YouTube (only applies in full mode)"
         required: false
         default: "true"
+      privacy:
+        description: "Privacy for THIS run's upload. 'unlisted' puts the katha on
+          YouTube without showing it to subscribers, so it can be watched before
+          going live. Scheduled runs are always public."
+        required: false
+        default: "public"
+        type: choice
+        options:
+          - public
+          - unlisted
+          - private
 
 concurrency:
-  group: krishnakatha-auto-longform
+  group: krishna-auto-longform
   cancel-in-progress: false
 
 defaults:
@@ -112,31 +114,84 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core \
-                                  fonts-noto-devanagari fonts-lohit-deva
+          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core fontconfig
+
+          # DEVANAGARI FONT. This step previously installed only fonts-dejavu-core,
+          # which contains NO Devanagari glyphs - and long-form has captions ON, so
+          # every katha would have carried a full subtitle track of empty boxes for
+          # 5-8 minutes straight, with no error in the log.
+          #
+          # Package names are not reliable: `fonts-noto-devanagari` does not exist
+          # as an Ubuntu package (an earlier reel run died on exactly that), and
+          # which package ships Noto's Devanagari faces moves between releases. So
+          # candidates are tried individually, then verified through fontconfig,
+          # with a direct download as the guaranteed fallback.
+          for pkg in fonts-noto-core fonts-indic fonts-lohit-deva \
+                     fonts-samyak-deva fonts-deva fonts-noto-extra ; do
+            sudo apt-get install -y "$pkg" 2>/dev/null \
+              && echo "installed: $pkg" \
+              || echo "not available on this release, skipping: $pkg"
+          done
+
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "No Hindi-capable font from apt - fetching Noto Sans Devanagari directly."
+            sudo mkdir -p /usr/share/fonts/truetype/krishna
+            for url in \
+              "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansDevanagari/hinted/ttf/NotoSansDevanagari-Bold.ttf" \
+              "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf" ; do
+              if sudo curl -fsSL --retry 3 --max-time 60 -o \
+                   /usr/share/fonts/truetype/krishna/NotoSansDevanagari-Bold.ttf "$url" ; then
+                echo "downloaded from: $url"
+                break
+              fi
+            done
+            sudo fc-cache -f >/dev/null 2>&1 || true
+          fi
+
+          echo "Hindi-capable fonts fontconfig can see:"
+          fc-list ":lang=hi" family file 2>/dev/null | head -10 || true
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "::error::No Devanagari font. A 5-8 minute katha would render its"
+            echo "entire caption track as empty boxes. Stopping instead."
+            exit 1
+          fi
           POLICY="/etc/ImageMagick-6/policy.xml"
           if [ -f "$POLICY" ]; then
             sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' "$POLICY" || true
             sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"\/>//' "$POLICY" || true
           fi
 
-      - name: Download royalty-free music tracks (soft, calm)
+      - name: Prepare background music
+        if: ${{ github.event.inputs.diagnose_only != 'true' }}
         run: |
           mkdir -p assets/music
-          dl() {
-            curl -fsSL --max-time 30 -o "assets/music/$1" "$2" 2>/dev/null || { rm -f "assets/music/$1"; echo "SKIP $1"; return 1; }
-            [ "$(stat -c%s "assets/music/$1" 2>/dev/null || echo 0)" -gt 10000 ] && echo "OK $1" || { rm -f "assets/music/$1"; echo "SKIP $1"; }
-          }
-          dl "01_calm_piano.mp3"     "https://cdn.pixabay.com/download/audio/2021/08/08/audio_dc39bde6cf.mp3" || true
-          dl "02_gentle_ambient.mp3" "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3" || true
-          dl "03_soft_strings.mp3"   "https://cdn.pixabay.com/download/audio/2022/10/30/audio_c8f4bb65b0.mp3" || true
-          dl "04_warm_piano.mp3"     "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bda.mp3" || true
-          dl "05_uplifting.mp3"      "https://cdn.pixabay.com/download/audio/2022/03/24/audio_2cba25c436.mp3" || true
-          dl "06_sunny.mp3"          "https://cdn.pixabay.com/download/audio/2023/02/28/audio_bb6f9a5552.mp3" || true
-          dl "07_cheerful.mp3"       "https://cdn.pixabay.com/download/audio/2022/08/31/audio_1c9e73e5cf.mp3" || true
-          dl "08_emotional.mp3"      "https://cdn.pixabay.com/download/audio/2023/01/16/audio_8b576799c1.mp3" || true
-          dl "09_heartfelt.mp3"      "https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3" || true
-          ls -la assets/music/ || true
+          # WHY THERE ARE NO DOWNLOADS HERE ANY MORE
+          #
+          # This step used to pull nine hard-coded Pixabay tracks named
+          # 01_happy_ukulele, 02_uplifting_pop, 07_kids_joy and so on. Those were
+          # chosen for a cute-pets channel. Under a Hindi Krishna katha they are
+          # actively wrong - a cheerful ukulele loop under the story of Gandhari's
+          # curse is the kind of mismatch a viewer feels in the first two seconds.
+          #
+          # They are not replaced with "devotional" URLs because a hard-coded CDN
+          # link cannot be verified from here, and a link that silently starts
+          # serving the wrong track (or a 404 HTML page) is worse than no link.
+          # Instead the pipeline falls back to modules/video_composer's
+          # _synth_background_music, which was rewritten to generate a tanpura
+          # drone with a slow bansuri line in a pentatonic raga - correct for this
+          # niche and impossible to get a copyright claim on.
+          #
+          # TO USE REAL MUSIC: commit your own royalty-free devotional tracks
+          # (bansuri / sitar / tanpura, instrumental only) into assets/music/ as
+          # .mp3. .gitignore already allows assets/music/*.mp3. Anything found
+          # there overrides the synth automatically - see _find_music_track().
+          COUNT=$(ls -1 assets/music/*.mp3 2>/dev/null | wc -l)
+          echo "Real music tracks found in assets/music: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No .mp3 tracks committed -> using the synthesized devotional drone."
+          else
+            ls -la assets/music/*.mp3
+          fi
 
       - name: Install Python dependencies
         run: |
@@ -172,7 +227,17 @@ jobs:
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
         run: |
-          python upload_youtube.py
+          # Whitelisted rather than passed straight through: the value reaches the
+          # YouTube API, which rejects anything outside these three and fails the
+          # whole upload - an expensive way to lose a finished render. A scheduled
+          # run has no inputs, so it lands on public.
+          case "${{ github.event.inputs.privacy }}" in
+            unlisted) PRIVACY=unlisted ;;
+            private)  PRIVACY=private ;;
+            *)        PRIVACY=public ;;
+          esac
+          echo "Uploading with privacy: $PRIVACY"
+          python upload_youtube.py --privacy "$PRIVACY"
 
       - name: Save no-repeat history back to the repo
         # See the equivalent step in auto-reel.yml. This pipeline keeps its own
@@ -216,7 +281,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: krishnakatha-output
+          name: krishna-output
           path: |
             longform/output/*.mp4
             longform/output/*.jpg

@@ -18,7 +18,7 @@ import os
 
 from .config import BASE_DIR, get_cfg, get_env
 
-log = logging.getLogger("krishnakatha.youtube")
+log = logging.getLogger("krishna.youtube")
 
 # upload scope covers video insert + thumbnail set.
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
