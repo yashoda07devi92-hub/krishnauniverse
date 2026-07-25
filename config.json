@@ -1,0 +1,210 @@
+{
+  "channel": {
+    "name": "Krishna Universe",
+    "niche": "Bhagwan Shri Krishna ki leelayein aur unse milne wali seekh",
+    "audience": "India (Hindi)",
+    "language": "hi",
+    "tagline": "Roz ek katha, roz ek seekh",
+    "url": "https://www.youtube.com/@KrishnaUniverse",
+    "url_note": "PLACEHOLDER. Replace with the real channel handle - it is printed in every description, so a wrong handle sends viewers nowhere."
+  },
+  "video": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "target_duration_seconds": 30,
+    "min_duration_seconds": 20,
+    "max_duration_seconds": 36,
+    "scene_cut_seconds": 2.6,
+    "clip_cut_seconds": 1.6,
+    "background_zoom": 1.04,
+    "bitrate": null,
+    "crf": 18,
+    "preset": "medium",
+    "voice_enabled": true,
+    "comment_duration": "30s as requested. A Hindi katha needs the extra seconds the parent channel did not - the leela has to land AND the seekh has to be stated, and 24s forces one of them out.",
+    "comment_cuts": "TWO cut lengths now. scene_cut_seconds is how long a generated Krishna frame holds; clip_cut_seconds is the shorter beat for real atmosphere footage cut in between. The real shots are kept shorter so they read as accents, not as the subject."
+  },
+  "motion": {
+    "comment": "The anti-slideshow settings. overscan is how much larger than the frame each still is rendered, which is the travel room a pan has - at 1.0 nothing can move and the result IS a slideshow. real_every controls the mix: after this many generated frames, one REAL moving shot is cut in. See video_composer._mixed_background for why that mix matters more than the zoom.",
+    "overscan": 1.28,
+    "zoom_amount": 0.1,
+    "real_every": 2
+  },
+  "ai_images": {
+    "comment": "This is the visual layer. There is no real footage of Krishna anywhere, so each story beat is generated from the ENGLISH scene prompts gemini_script requests alongside the narration. Vertical (1080x1920) on purpose - generating 16:9 and cropping would cut the crown off the top of every frame.",
+    "enabled": true,
+    "model": "flux",
+    "width": 1080,
+    "height": 1920,
+    "max_images": 7,
+    "workers": 4,
+    "attempts": 4,
+    "time_budget_seconds": 240,
+    "style": "cinematic indian mythological art, dramatic warm lighting, rich saffron and deep blue palette, highly detailed, volumetric god rays, soft film grain, painterly, devotional, beautiful",
+    "style_note": "One house style across all 150 leelas. Without it every upload arrives in a different art style, which is what makes an AI channel look like a random image dump rather than a channel."
+  },
+  "transitions": {
+    "comment": "Shorter than the parent channel's 0.3s. With cuts every ~1.6-2.6s a long crossfade eats a real fraction of each shot and softens the pace.",
+    "crossfade_seconds": 0.25
+  },
+  "palette": {
+    "comment": "Saffron / gold / deep indigo - devotional, not pastel.",
+    "gradient_top": [255, 196, 118],
+    "gradient_bottom": [138, 76, 158],
+    "gradient_accent": [255, 236, 190],
+    "solid_fallback": [216, 138, 76]
+  },
+  "captions": {
+    "comment": "OFF, matching the owner's decision on the parent channel: the rolling word-by-word track with a dark pill behind it looked cluttered and covered the subject. Do NOT switch this on without asking. Muted viewers are served by flash_text instead. NOTE: the 'font' key here is now ignored - all text goes through modules/textrender.py, which resolves a Devanagari font itself.",
+    "enabled": false,
+    "fontsize": 78,
+    "color": "white",
+    "stroke_color": "black",
+    "stroke_width": 5,
+    "font": "ignored-see-textrender",
+    "words_per_group": 3,
+    "position_y_ratio": 0.66,
+    "bg_opacity": 0.3,
+    "bg_color": "#000000",
+    "rounded": true,
+    "accent_color": "#FFC44C"
+  },
+  "flash_text": {
+    "comment": "Three short Hindi phrases (2-4 words) appear for ~1.4s each in the UPPER third, no backdrop panel, soft fade. Gives a muted viewer something to read without covering the scene. Slightly longer and slightly smaller than the parent channel's: Devanagari takes more horizontal room per word and needs a beat longer to read than English.",
+    "enabled": true,
+    "count": 3,
+    "duration_seconds": 1.4,
+    "fade_seconds": 0.25,
+    "fontsize": 72,
+    "color": "#FFF6E0",
+    "stroke_color": "black",
+    "stroke_width": 5,
+    "font": "ignored-see-textrender",
+    "position_y_ratio": 0.13,
+    "end_before_seconds": 2.5
+  },
+  "hook": {
+    "comment": "Short 2-4 word Hindi label from pools.SCREEN_HOOKS for the first 2.5s. fontsize reduced 118 -> 100: Devanagari has matras above and conjuncts below the baseline, so the same point size occupies noticeably more vertical space than Latin and 118 pushed 2-line hooks off frame.",
+    "enabled": true,
+    "duration_seconds": 2.5,
+    "fontsize": 100,
+    "color": "#FFF6E0",
+    "stroke_color": "black",
+    "stroke_width": 6,
+    "font": "ignored-see-textrender",
+    "pop_overshoot": 1.16,
+    "pop_in_seconds": 0.4,
+    "punch_zoom": 1.05,
+    "flash_opacity": 0.12,
+    "backdrop_opacity": 0.32,
+    "suppress_captions": true
+  },
+  "tts": {
+    "comment": "HINDI voices. Madhur (male) leads because a katha-vachak reading suits this niche and is what the audience expects. The pool is deliberately SMALL - only 2 voices. The parent channel rotates 6, but on a katha channel a returning viewer builds trust with one narrator, and swapping voices daily breaks the only piece of channel identity a faceless channel has. Two is enough to avoid sounding like a single automated template while staying recognisable.",
+    "voice": "hi-IN-MadhurNeural",
+    "voice_pool": ["hi-IN-MadhurNeural", "hi-IN-SwaraNeural"],
+    "rate_pool": ["-12%", "-10%", "-8%"],
+    "rate": "-10%",
+    "rate_note": "Slower than the parent channel. Devotional narration read at conversational speed sounds rushed and disrespectful, and Hindi TTS is harder to follow at speed than English.",
+    "pitch": "+0Hz",
+    "fallback_lang": "hi",
+    "fallback_tld": "co.in"
+  },
+  "gemini": {
+    "model": "gemini-2.0-flash",
+    "model_candidates": ["gemini-2.0-flash", "gemini-flash-latest", "gemini-2.5-flash"],
+    "target_words": 68,
+    "target_words_note": "Hindi TTS at -10% rate runs roughly 130-140 words/min, so ~68 words lands near 30s. Raising this without lowering the rate is what makes a 'Short' overshoot 60s.",
+    "temperature": 0.92
+  },
+  "seo": {
+    "comment": "Consumed by modules/seo.py. hashtag_count stays under 15 because YouTube ignores ALL hashtags on a video carrying more than 15.",
+    "hashtag_count": 9,
+    "channel_url": "https://www.youtube.com/@KrishnaUniverse"
+  },
+  "thumbnail": {
+    "comment": "Shorts thumbnails do not show inside the Shorts player, but they ARE the channel grid, the subscriptions feed and search - the surfaces where a viewer decides to subscribe. Text is drawn through textrender so the Hindi caption is shaped correctly.",
+    "enabled": true,
+    "text_enabled": true,
+    "fontsize": 92,
+    "stroke_width": 7,
+    "saturation": 1.22,
+    "contrast": 1.1,
+    "brightness": 1.05
+  },
+  "pexels": {
+    "comment": "ATMOSPHERE ONLY. These are things that genuinely exist on stock video sites - river water, peacocks, cows, diya flames, rain. Krishna himself is never searched for here (there is no such footage); the leela is carried by ai_images. The composer cuts these real moving shots between the generated frames, which is what stops the result reading as a slideshow.",
+    "default_keywords": [
+      "peacock feathers close up",
+      "river water flowing sunlight",
+      "cows grazing green field india",
+      "oil lamp diya flame dark",
+      "indian temple architecture",
+      "flute bamboo close up",
+      "lotus flower in pond",
+      "monsoon rain on leaves",
+      "forest sunlight rays trees",
+      "golden sunset over river",
+      "marigold flowers garland",
+      "banyan tree ancient roots",
+      "morning mist over water",
+      "incense smoke slow motion",
+      "yellow mustard field wind",
+      "night sky stars time lapse"
+    ],
+    "per_query": 20,
+    "min_clips": 6,
+    "min_images": 6,
+    "orientation": "portrait"
+  },
+  "music": {
+    "enabled": true,
+    "volume": 0.16,
+    "synth_fallback": true,
+    "synth_volume": 0.16,
+    "hook_sting_enabled": true,
+    "hook_sting_volume": 0.5,
+    "comment": "Music slightly quieter than the parent channel (0.18 -> 0.16). The narration here carries the whole video and Hindi consonant clusters lose clarity under a busy bed far faster than English does."
+  },
+  "grade": {
+    "comment": "Warm, rich, devotional. Vignette OFF (the oval look was rejected on the parent channel).",
+    "enabled": true,
+    "warm_color": [255, 170, 90],
+    "warm_opacity": 0.06,
+    "vignette_strength": 0.0,
+    "saturation": 1.18,
+    "contrast": 0.14,
+    "brightness": 8
+  },
+  "youtube": {
+    "category_id": "24",
+    "category_note": "24 = Entertainment. Devotional storytelling sits here rather than 27 (Education); Entertainment is where this niche's traffic and suggested-video pool actually is.",
+    "privacy_status": "public",
+    "default_language": "hi",
+    "default_audio_language": "hi",
+    "language_note": "Both language fields matter. Without them YouTube guesses the language from the title, and a Hindi video mislabelled as English is served to the wrong audience and loses auto-translation of the title/description.",
+    "made_for_kids": false,
+    "made_for_kids_note": "Owner confirmed this channel is NOT made for kids. Marking it as such would disable comments entirely - killing the pinned-comment strategy - and switch off personalised ads, roughly halving RPM.",
+    "default_tags_note": "FALLBACK ONLY. modules/seo.py builds a per-video, leela-aware tag set at generate time.",
+    "default_tags": [
+      "कृष्ण कथा", "krishna story in hindi", "श्रीकृष्ण", "भक्ति कथा",
+      "गीता उपदेश", "महाभारत कथा", "hindi moral story", "कृष्ण लीला"
+    ],
+    "hashtags_note": "FALLBACK ONLY. Per-video rotating hashtags come from modules/seo.py.",
+    "hashtags": "#shorts #कृष्ण #कृष्णकथा #भक्ति"
+  },
+  "instagram": {
+    "enabled": false,
+    "comment": "OFF by default - automated IG posting carries account ban risk."
+  },
+  "posting_times_ist": {
+    "comment": "India Standard Time targets. IST has NO daylight saving, so unlike the parent channel's US schedule the cron never needs a seasonal correction. Cron in the workflow is UTC = IST - 5:30, set ~80 min EARLIER than the publish target to absorb GitHub's scheduler queue delay plus render time.",
+    "morning_puja": "07:15 IST",
+    "lunch": "13:30 IST",
+    "sandhya_aarti": "19:15 IST",
+    "night_peak": "21:15 IST",
+    "late_night": "22:45 IST",
+    "longform": "20:30 IST"
+  }
+}

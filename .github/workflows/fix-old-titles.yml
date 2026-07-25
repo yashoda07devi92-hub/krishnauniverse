@@ -1,0 +1,144 @@
+name: Fix Old Video Titles
+
+# ============================================================================
+# WHAT THIS DOES
+#
+# Every video published before the SEO engine landed carries the same stamped
+# title suffix and the same hashtag block:
+#
+#     "A Rescue Kitten Finds True Love | Cute & Wholesome #shorts #cute"
+#     "Puppy Discovers Snow For The First Time | Cute & Wholesome #shorts #cute"
+#
+# Fixing the generator only fixes FUTURE uploads. This rewrites the back
+# catalogue in place - title, description and tags - using the same
+# modules/seo.py engine. The video file, view count, URL and publish date are
+# never touched.
+#
+# HOW TO USE IT
+#   Actions -> "Fix Old Video Titles" -> Run workflow
+#     mode = dry-run  ->  shows the before/after for each video, changes NOTHING
+#     mode = apply    ->  actually writes the changes
+#
+#   Always run dry-run first and read the output.
+#
+# SETUP (once)
+#   Needs a token with the youtube.force-ssl scope, which the daily upload token
+#   does NOT have. See TOKEN_SETUP.md for browser-only instructions, then store
+#   it as the repository secret YT_MANAGE_TOKEN_JSON.
+#
+# QUOTA
+#   videos.update costs 50 units against the 10,000/day YouTube API allowance,
+#   and the daily uploads already spend ~8,250. So ~30 edits/day is the safe
+#   ceiling; the default of 20 leaves margin. Run it across several days.
+#
+# This workflow is MANUAL ONLY - it is never scheduled and cannot fire on its own.
+# ============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run = preview only (safe) | apply = actually rewrite"
+        required: true
+        type: choice
+        default: "dry-run"
+        options:
+          - dry-run
+          - apply
+      limit:
+        description: "How many videos to process this run (20 is the safe default)"
+        required: false
+        default: "20"
+      skip_top:
+        description: "Protect the N best-performing videos (do not rewrite them)"
+        required: false
+        default: "15"
+      only_legacy:
+        description: "Only videos still carrying the '| Cute & Wholesome' stamp"
+        required: false
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: krishna-fix-titles
+  cancel-in-progress: false
+
+jobs:
+  rewrite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Deliberately NOT requirements.txt: this job only talks to the YouTube
+        # API, so pulling moviepy/numpy/Pillow would add minutes for nothing.
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            google-api-python-client==2.137.0 \
+            google-auth==2.32.0 \
+            google-auth-oauthlib==1.2.1 \
+            google-auth-httplib2==0.2.0 \
+            requests==2.32.3 \
+            python-dotenv==1.0.1
+
+      - name: Check the management token is present
+        env:
+          YT_MANAGE_TOKEN_JSON: ${{ secrets.YT_MANAGE_TOKEN_JSON }}
+        run: |
+          if [ -z "${YT_MANAGE_TOKEN_JSON}" ]; then
+            echo "::error::Secret YT_MANAGE_TOKEN_JSON is not set."
+            echo "This job needs a token with the youtube.force-ssl scope."
+            echo "The daily upload token (YT_TOKEN_JSON) only has youtube.upload"
+            echo "and cannot edit videos. See TOKEN_SETUP.md for the browser-only"
+            echo "steps, then add the secret under Settings -> Secrets and"
+            echo "variables -> Actions."
+            exit 1
+          fi
+          echo "Management token found."
+
+      - name: Preview the changes (DRY RUN - nothing is modified)
+        if: ${{ github.event.inputs.mode == 'dry-run' }}
+        env:
+          YT_MANAGE_TOKEN_JSON: ${{ secrets.YT_MANAGE_TOKEN_JSON }}
+        run: |
+          echo "=============================================================="
+          echo " DRY RUN - no video will be changed."
+          echo " Read the OLD/NEW pairs below, then re-run with mode = apply."
+          echo "=============================================================="
+          ARGS="--limit ${{ github.event.inputs.limit }} --skip-top ${{ github.event.inputs.skip_top }}"
+          if [ "${{ github.event.inputs.only_legacy }}" = "true" ]; then
+            ARGS="$ARGS --only-legacy"
+          fi
+          python retitle_existing.py $ARGS
+
+      - name: Rewrite the metadata (APPLY - this changes your videos)
+        if: ${{ github.event.inputs.mode == 'apply' }}
+        env:
+          YT_MANAGE_TOKEN_JSON: ${{ secrets.YT_MANAGE_TOKEN_JSON }}
+        run: |
+          echo "=============================================================="
+          echo " APPLYING changes to up to ${{ github.event.inputs.limit }} video(s)."
+          echo " The ${{ github.event.inputs.skip_top }} best performers are protected."
+          echo "=============================================================="
+          ARGS="--limit ${{ github.event.inputs.limit }} --skip-top ${{ github.event.inputs.skip_top }} --apply"
+          if [ "${{ github.event.inputs.only_legacy }}" = "true" ]; then
+            ARGS="$ARGS --only-legacy"
+          fi
+          python retitle_existing.py $ARGS
+          echo ""
+          echo "Done. YouTube search usually re-indexes within a few hours."
+          echo "Run this again tomorrow for the next batch."

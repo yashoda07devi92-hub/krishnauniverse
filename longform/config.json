@@ -1,0 +1,102 @@
+{
+  "channel": {
+    "comment": "IMPORTANT: this pipeline uploads with the SAME YT_TOKEN_JSON as the Shorts pipeline, i.e. onto the SAME YouTube channel (@KrishnaUniverse). Descriptions used to welcome viewers to 'Krishna Universe', a brand that does not exist on that channel. The name is aligned here so the audience, the branding and YouTube's topic model all agree. If these long-form stories are ever moved to their own channel, change this back and give that channel its own token.",
+    "name": "Sweet Soul Stories",
+    "cta": "Subscribe for a brand-new story every single day!",
+    "cta_pool_note": "The 30 rotating sign-offs now live in modules/pools.py (CTA_CANDIDATES) and are drawn without replacement via modules/history.py. Adding a 'cta_pool' array here would OVERRIDE that larger pool, so leave it out unless you deliberately want a shorter list."
+  },
+  "seo": {
+    "comment": "Consumed by modules/seo.py. Chapters need >=3 entries, must start at 0:00, and each must be >=10s or YouTube ignores the whole block.",
+    "hashtag_count": 8,
+    "chapter_count": 6,
+    "channel_url": "https://www.youtube.com/@KrishnaUniverse"
+  },
+  "video": {
+    "width": 1280,
+    "height": 720,
+    "fps": 18,
+    "comment_duration": "Retargeted to 3-5 minutes. NOTE: the composer never cuts the video to max_duration_seconds - it always matches the voiceover length - so length is actually controlled by story.target_words below. These bounds only decide when a warning is logged.",
+    "target_duration_seconds": 240,
+    "min_duration_seconds": 180,
+    "max_duration_seconds": 300,
+    "clip_cut_seconds": 5.0,
+    "preset": "veryfast",
+    "crf": 23
+  },
+  "story": {
+    "comment": "THIS is what controls video length. The storyteller voice runs ~145 words/minute at the configured rate, so 420-700 words = 3-5 minutes. A story over max_words is rejected and the next model is asked; if all of them overshoot, the shortest is trimmed at a sentence boundary with the moral re-appended.",
+    "target_words": 560,
+    "min_words": 440,
+    "max_words": 700
+  },
+  "palette": {
+    "comment": "Calm dark-blue storytime backdrop used only when no footage is available",
+    "gradient_top": [25, 32, 64],
+    "gradient_bottom": [10, 12, 28],
+    "solid_fallback": [16, 20, 40]
+  },
+  "captions": {
+    "enabled": true,
+    "fontsize": 42,
+    "color": "white",
+    "stroke_color": "black",
+    "stroke_width": 3,
+    "font": "DejaVu-Sans-Bold",
+    "words_per_group": 9,
+    "position_y_ratio": 0.82,
+    "bg_opacity": 0.4,
+    "bg_color": "#000000",
+    "rounded": true
+  },
+  "intro": {"enabled": true, "duration_seconds": 4.0, "fontsize": 64},
+  "outro": {"enabled": true, "duration_seconds": 5.0, "fontsize": 46},
+  "transitions": {"crossfade_seconds": 0.4},
+  "grade": {"enabled": true, "saturation": 1.1, "brightness": 6, "contrast": 0.08},
+  "tts": {"voice": "en-US-AriaNeural", "rate": "-3%", "pitch": "+0Hz", "chunk_chars": 600},
+  "gemini": {
+    "model": "gemini-2.0-flash",
+    "model_candidates": ["gemini-2.0-flash", "gemini-flash-latest", "gemini-2.5-flash"],
+    "temperature": 0.95
+  },
+  "pexels": {
+    "orientation": "landscape",
+    "min_clips": 20,
+    "per_query": 20,
+    "default_keywords": [
+      "children playing outdoor",
+      "happy family sunset",
+      "forest path sunlight",
+      "village morning",
+      "kids reading book",
+      "nature landscape calm",
+      "old man smiling",
+      "river flowing nature"
+    ]
+  },
+  "music": {"enabled": true, "volume": 0.12, "synth_fallback": true, "synth_volume": 0.08},
+  "ai_images": {
+    "enabled": true,
+    "model": "turbo",
+    "style": "soft warm childrens storybook illustration, gentle cartoon style, wholesome, cinematic lighting, no text, no words, no letters",
+    "max_images": 10,
+    "width": 1280,
+    "height": 720,
+    "workers": 1,
+    "motion": false,
+    "time_budget_seconds": 200,
+    "min_required": 1
+  },
+  "youtube": {
+    "category_id": "24",
+    "privacy_status": "public",
+    "made_for_kids": false,
+    "hashtags_note": "FALLBACK ONLY. Per-episode rotating hashtags now come from modules/seo.py.",
+    "hashtags": "#moralstories #bedtimestories #storiesforkids",
+    "default_tags_note": "FALLBACK ONLY. modules/seo.py builds the per-episode tag set within YouTube's 500-char budget.",
+    "default_tags": [
+      "moral stories", "bedtime stories", "stories for kids",
+      "short story with moral", "moral of the story", "english moral story",
+      "story for children", "good moral stories"
+    ]
+  }
+}

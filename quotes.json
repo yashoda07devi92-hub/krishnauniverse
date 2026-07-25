@@ -1,0 +1,118 @@
+{
+  "_comment": "FALLBACK ONLY. Used when GEMINI_API_KEY is missing or every Gemini model fails. These are complete Hindi narrations so a reel is still produced instead of the run dying. Each carries its own scene_prompts (ENGLISH) so the visuals still depict the leela rather than falling back to generic wallpaper. Keep this list small on purpose: if the pipeline is running on fallbacks for days, the same handful of stories WILL repeat, and the fix is to restore the Gemini key, not to grow this file.",
+  "_length_note": "Each 'text' is ~68 words, which is ~30s at the configured Hindi TTS rate of -10%.",
+  "scripts": [
+    {
+      "title": "गोवर्धन उठाने की असली सीख",
+      "seekh": "जो तुम्हें रोज़ पालता है, उसका आदर करो — दिखावे का नहीं",
+      "text": "कान्हा ने बस एक लाइन में सब समझा दिया। इंद्र को गुस्सा आया कि गोकुल ने उनकी पूजा छोड़कर गोवर्धन पर्वत की पूजा क्यों की। सात दिन मूसलाधार बारिश हुई। कान्हा ने पर्वत उठाकर पूरे गाँव को उसके नीचे बचा लिया। इंद्र समझ गए और झुक गए। सीख यही है कि जो तुम्हें रोज़ पालता है, उसका आदर करो — दिखावे का नहीं। राधे राधे। ऐसी ही कथाओं के लिए फॉलो कीजिए।",
+      "keywords": ["monsoon rain on leaves", "cows grazing green field india", "rain clouds dark sky", "river water flowing sunlight"],
+      "scene_prompts": [
+        "young krishna with peacock feather crown standing calmly as heavy monsoon rain falls over an ancient indian village, dramatic storm light",
+        "villagers and cows sheltering beneath a huge lifted mountain, warm lamp light from below, dramatic scale",
+        "indra king of gods on a storm cloud looking down, angry sky, lightning",
+        "young krishna lifting an enormous mountain on one finger, rain streaming off the edges, cinematic low angle",
+        "villagers bowing with folded hands in gratitude, golden light breaking through clouds",
+        "peaceful village after rain, wet earth, rainbow, cows resting, soft golden hour light"
+      ]
+    },
+    {
+      "title": "एक मुट्ठी चावल और सुदामा",
+      "seekh": "प्रेम से दी गई सबसे छोटी चीज़ सबसे बड़ी होती है",
+      "text": "सुदामा को अपनी झोपड़ी नहीं मिली। पत्नी के कहने पर वो द्वारका गए, पोटली में सिर्फ़ तीन मुट्ठी चावल थे। देने में शर्म आ रही थी। कान्हा ने वो पोटली खुद छीन ली और प्रेम से चावल खा लिए। सुदामा लौटे तो झोपड़ी की जगह महल खड़ा था। सीख यही है कि प्रेम से दी गई सबसे छोटी चीज़ सबसे बड़ी होती है। जय श्री कृष्ण। रोज़ एक नई सीख के लिए जुड़े रहिए।",
+      "keywords": ["clay pot water village", "indian temple architecture", "brass utensils temple", "village mud houses india"],
+      "scene_prompts": [
+        "poor elderly brahmin in worn white dhoti walking a dusty road with a small cloth bundle, dawn light",
+        "grand golden palace gates of dwarka city by the sea, majestic architecture",
+        "krishna in royal blue and gold embracing a poor barefoot friend warmly, courtiers watching",
+        "krishna eating a handful of plain rice from a torn cloth bundle, smiling, warm intimate light",
+        "old man walking home at sunset, silhouette, long shadows, dusty path",
+        "a magnificent palace standing where a mud hut used to be, astonished old man, golden evening light"
+      ]
+    },
+    {
+      "title": "जब अर्जुन ने धनुष रख दिया",
+      "seekh": "फल की चिंता छोड़कर किया गया काम कभी बोझ नहीं बनता",
+      "text": "ये सुनकर आपकी सोच बदल जाएगी। कुरुक्षेत्र में अर्जुन ने अपने ही लोगों को सामने देखा और गांडीव रख दिया। हाथ काँप रहे थे। तब कान्हा ने रथ रोककर कहा — जो तुम्हारे हाथ में है वो करो, फल की गिनती मत करो। यही गीता का पहला पाठ था। सीख यही है कि फल की चिंता छोड़कर किया गया काम कभी बोझ नहीं बनता। हरे कृष्ण। अगली कथा के लिए फॉलो करें।",
+      "keywords": ["golden sunset over river", "forest sunlight rays trees", "night sky stars time lapse", "incense smoke slow motion"],
+      "scene_prompts": [
+        "vast ancient battlefield at dawn, two enormous armies facing each other, dust and banners",
+        "warrior in armour lowering his great bow, head bowed in despair, chariot behind him",
+        "krishna as charioteer holding the reins, turning to speak, calm and radiant, four white horses",
+        "close view of krishna speaking with a raised hand, divine golden glow behind him",
+        "warrior lifting his bow again with resolve, sunrise light on his face",
+        "chariot on a battlefield silhouetted against a huge golden sun, dramatic wide shot"
+      ]
+    },
+    {
+      "title": "द्रौपदी की एक पुकार",
+      "seekh": "जो सच्चे मन से पुकारे, उसकी लाज कभी नहीं जाती",
+      "text": "द्रौपदी ने बस एक बार पुकारा था। भरी सभा में सब चुप थे — बड़े-बड़े योद्धा सिर झुकाकर बैठे थे। किसी ने आवाज़ नहीं उठाई। तब द्रौपदी ने आँख बंद कर के सिर्फ़ कान्हा का नाम लिया, और चीर बढ़ता ही चला गया। सीख यही है कि जो सच्चे मन से पुकारे, उसकी लाज कभी नहीं जाती। जय कन्हैया लाल की। जुड़े रहिए।",
+      "keywords": ["oil lamp diya flame dark", "indian temple architecture", "marigold flowers garland", "brass utensils temple"],
+      "scene_prompts": [
+        "grand ancient indian royal court hall, oil lamps, many seated noblemen, tense heavy atmosphere",
+        "a woman standing alone in the centre of a vast court, dignified, dim dramatic light",
+        "rows of warriors sitting with heads lowered in shame, shadowed faces",
+        "a woman with closed eyes and folded hands praying, single beam of light on her",
+        "endless flowing silk fabric filling the hall like a miracle, warm golden glow",
+        "krishna standing unseen in golden light behind her, serene, protective"
+      ]
+    },
+    {
+      "title": "माखन चोरी के पीछे की बात",
+      "seekh": "जो प्रेम से चुराया जाए, वो चोरी नहीं होती",
+      "text": "कान्हा ने माखन चुराया, पर वजह कुछ और थी। गोपियाँ रोज़ यशोदा के पास शिकायत लेकर आतीं, और यशोदा झूठा गुस्सा दिखातीं। सच ये था कि गोपियाँ माखन छिपाती ही इसलिए थीं कि कान्हा आएँ। चोरी का बहाना था, मिलने की इच्छा असली थी। सीख यही है कि जो प्रेम से चुराया जाए, वो चोरी नहीं होती। राधे राधे। कल फिर मिलेंगे एक नई कथा के साथ।",
+      "keywords": ["butter churning traditional", "clay pot water village", "cow close up village india", "village mud houses india"],
+      "scene_prompts": [
+        "chubby baby krishna with butter smeared on his face, mischievous smile, village home interior",
+        "clay pots of butter hanging from a wooden ceiling beam, warm morning light",
+        "small child reaching up on tiptoe toward a hanging pot, playful, sunbeam through a window",
+        "village women standing at a doorway pretending to complain, hiding smiles",
+        "mother yashoda scolding a small child while smiling with love, warm lamp light",
+        "empty butter pot on the floor and small buttery footprints leading away, soft light"
+      ]
+    },
+    {
+      "title": "कालिया नाग का अहंकार",
+      "seekh": "अहंकार जितना ऊँचा उठे, गिरने के लिए उतनी ही जगह बनाता है",
+      "text": "कालिया का अहंकार एक पल में टूट गया। उसके ज़हर से यमुना का पानी काला हो गया था, गाय पीती थीं तो मर जाती थीं। पूरा गोकुल डरा हुआ था। कान्हा कूदे और उसके सौ फनों पर नाचने लगे। नाग पत्नियों ने क्षमा माँगी और कान्हा ने उसे छोड़ दिया। सीख यही है कि अहंकार जितना ऊँचा उठे, गिरने के लिए उतनी ही जगह बनाता है। हरे कृष्ण। कल एक और लीला के साथ मिलते हैं।",
+      "keywords": ["river water flowing sunlight", "calm river at sunrise", "cows grazing green field india", "lotus flower in pond"],
+      "scene_prompts": [
+        "dark poisoned river with black water, dead leaves, ominous atmosphere, indian riverbank",
+        "villagers and cows standing fearfully at the edge of a black river",
+        "young krishna diving into deep dark water, bubbles, dramatic underwater light",
+        "enormous many hooded serpent rising from the water, terrifying scale, storm sky",
+        "young krishna dancing gracefully on the hoods of a giant serpent, divine glow, wide cinematic shot",
+        "clear blue river with lotus flowers and cows drinking peacefully, golden morning light"
+      ]
+    },
+    {
+      "title": "बर्बरीक का शीश दान",
+      "seekh": "सच्चा दान वो है जिसमें अपना सब कुछ चला जाए",
+      "text": "बर्बरीक के पास तीन बाण थे जो अकेले पूरा युद्ध खत्म कर सकते थे। कान्हा ब्राह्मण के रूप में आए और दान माँगा। बर्बरीक ने वचन दिया था, तो अपना शीश काटकर दे दिया। कान्हा ने उसे वरदान दिया कि कलियुग में तुम खाटू श्याम बनकर पूजे जाओगे। सीख यही है कि सच्चा दान वो है जिसमें अपना सब कुछ चला जाए। जय श्री कृष्ण। ऐसी कथाओं के लिए साथ रहिए।",
+      "keywords": ["oil lamp diya flame dark", "forest sunlight rays trees", "incense smoke slow motion", "night sky stars time lapse"],
+      "scene_prompts": [
+        "young mighty warrior with three glowing arrows standing in a forest at dusk",
+        "simple brahmin in white robes approaching with folded hands, humble, forest path",
+        "warrior kneeling and offering something with both hands, respectful, dramatic light",
+        "divine golden light revealing krishna's true form to a kneeling warrior",
+        "a stone shrine with a warrior's face garlanded with marigolds, lamps and devotees",
+        "temple at night filled with oil lamps and devotees, warm glowing atmosphere"
+      ]
+    },
+    {
+      "title": "गांधारी का श्राप और कान्हा की मुस्कान",
+      "seekh": "जो अपनी ज़िम्मेदारी लेता है, वही सच्चा बड़ा है",
+      "text": "गांधारी ने कान्हा को श्राप दिया था। सौ बेटे खोने के बाद उन्होंने कहा — तुम्हारा वंश भी इसी तरह नष्ट होगा। कान्हा चाहते तो श्राप रोक सकते थे, पर उन्होंने हाथ जोड़कर हँसते हुए स्वीकार कर लिया। एक माँ का दुख किसी तर्क से शांत नहीं होता। सीख यही है कि जो अपनी ज़िम्मेदारी लेता है, वही सच्चा बड़ा है। राधे राधे। कान्हा की कृपा आप पर बनी रहे।",
+      "keywords": ["golden sunset over river", "candle flame flickering dark", "incense smoke slow motion", "footprints in wet sand"],
+      "scene_prompts": [
+        "empty battlefield after war at dusk, broken chariots, smoke, sombre light",
+        "blindfolded elderly queen in white standing in grief, dim dramatic light",
+        "krishna standing calmly with folded hands, accepting, serene expression, golden glow",
+        "grieving mother raising a hand in anguish, dark stormy background",
+        "krishna walking away alone along a shoreline at sunset, long shadow",
+        "sunset over the sea beside an ancient city, peaceful and final, warm light"
+      ]
+    }
+  ]
+}

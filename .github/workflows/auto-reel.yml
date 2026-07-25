@@ -1,0 +1,359 @@
+name: Krishna Universe Auto Reel
+# Schedule re-registered: 2026-06-21
+
+on:
+  schedule:
+    # ---------------------------------------------------------------------
+    # 5 reels/day, spread across THREE US audience windows instead of stacking
+    # all of them into the evening:
+    #
+    #   3 reels - EVENING PRIME  (7:00 PM - 1:30 AM ET)  <- the main window
+    #   1 reel  - MORNING SCROLL (6:00 AM - 9:00 AM ET)
+    #   1 reel  - AFTER SCHOOL   (3:00 PM - 5:00 PM ET)
+    #
+    # WHY NOT ALL FIVE IN THE EVENING: on a channel this size every upload is
+    # tested against roughly the same small slice of subscribers. Five uploads
+    # inside one five-hour block means video 2 enters the feed while video 1 is
+    # still being tested, so they compete with each other instead of with the
+    # rest of YouTube. Splitting the day gives each upload its own audience.
+    #
+    # NOTE ON THE MORNING SLOT: a morning slot (cron "17 12", ~8:17 AM ET) was
+    # removed earlier because it "got almost no views". That was measured when
+    # every video shared an identical title and had no on-screen text, so the
+    # slot was never really tested on its own. This re-tests it. Run
+    # `python slot_report.py --shorts-only` after ~2 weeks and cut it on data,
+    # not on a hunch.
+    #
+    # THREE THINGS THESE TIMES ACCOUNT FOR
+    #
+    # 1) CRON TIME IS NOT PUBLISH TIME. THE LEAD IS ~80 MINUTES, MEASURED.
+    #    A GitHub Actions schedule is queued, not guaranteed. This was first
+    #    guessed at 30 minutes; the real figure was then measured against five
+    #    consecutive scheduled runs on this repo:
+    #
+    #        cron 14:43 UTC -> started 16:06   (+83 min)
+    #        cron 17:29 UTC -> started 18:57   (+88 min)
+    #        cron 21:11 UTC -> started 22:15   (+64 min)
+    #        cron 23:53 UTC -> started 01:12   (+79 min)
+    #        cron 23:53 UTC -> started 01:11   (+78 min)
+    #                                  average  +78 min
+    #
+    #    The render itself is fast - those runs completed in 4-6 minutes - so
+    #    essentially all of the lead is queue time. Every cron below is set
+    #    80 MINUTES before its intended publish time.
+    #
+    #    Do NOT "tidy" these into round times, and do not shorten the lead
+    #    without re-measuring. Verify with `python slot_report.py --shorts-only`,
+    #    which reads the real publish hour off YouTube rather than guessing.
+    #
+    # 2) US DAYLIGHT SAVING TIME.
+    #    Cron is fixed UTC, but US Eastern is UTC-4 in summer (EDT) and UTC-5
+    #    in winter (EST), so every slot drifts an hour earlier from early
+    #    November to mid March. Each target below is placed so that BOTH states
+    #    stay inside its window, which means these crons never need to be
+    #    edited twice a year:
+    #        summer (EDT): 7:57 AM, 4:13 PM, 8:07 PM, 10:53 PM, 1:17 AM
+    #        winter (EST): 6:57 AM, 3:13 PM, 7:07 PM,  9:53 PM, 12:17 AM
+    #
+    # 2b) SCHEDULED RUNS ARE SOMETIMES DROPPED ENTIRELY.
+    #    Run #160 failed with "The job was not acquired by Runner of type hosted
+    #    even after multiple attempts" plus a GitHub internal server error - no
+    #    runner was ever assigned, so nothing in this repo could have prevented
+    #    it. Nothing to fix in code; it costs one reel. Minute values below avoid
+    #    :00 and :30, which is when the scheduler is most congested and both
+    #    delays and dropped runs are worst.
+    #
+    # 3) THE YOUTUBE API QUOTA, NOT GITHUB MINUTES.
+    #    The repo is public now, so Actions minutes are unlimited - but the
+    #    YouTube Data API still allows 10,000 units/day and videos.insert
+    #    costs 1,600, i.e. a hard ceiling of 6 uploads per day. The quota
+    #    resets at midnight PACIFIC (07:00 UTC), not at UTC midnight, so all
+    #    five crons below fall inside ONE quota day even though they span two
+    #    UTC dates. Budget per quota day:
+    #        5 reels x 1,650 = 8,250 units  (leaves room for a retry)
+    #    The 23:27 slot is skipped on the days the long-form video runs
+    #    (Mon/Wed/Fri UTC) so those days stay at 4 reels + 1 long-form = 8,250
+    #    instead of 9,900, which would leave no margin for a failed retry.
+    #
+    # Minute values deliberately avoid :00 and :30 - that is when the Actions
+    # scheduler is most congested and delays are worst.
+    # ---------------------------------------------------------------------
+    # --- MORNING SCROLL (6:00 - 9:00 AM ET) ---
+    - cron: "37 10 * * *"        # -> ~7:57 AM EDT / ~6:57 AM EST
+    # --- AFTER SCHOOL (3:00 - 5:00 PM ET) ---
+    - cron: "53 18 * * *"        # -> ~4:13 PM EDT / ~3:13 PM EST
+    # --- EVENING PRIME (7:00 PM - 1:30 AM ET) ---
+    # This first evening slot is skipped on Mon/Wed/Fri: the long-form video
+    # publishes at ~8:39 PM those days, and a reel at ~8:07 PM would land half an
+    # hour ahead of it and split the same audience. Skipping it also keeps the
+    # quota at 8,250 units instead of 9,900 on long-form days.
+    - cron: "47 22 * * 0,2,4,6"  # -> ~8:07 PM EDT / ~7:07 PM EST
+    - cron: "33 1 * * *"         # -> ~10:53 PM EDT / ~9:53 PM EST
+    - cron: "57 3 * * *"         # -> ~1:17 AM EDT / ~12:17 AM EST
+  workflow_dispatch:
+    inputs:
+      diagnose_only:
+        description: "Only check secrets/sources, do NOT make a video (true/false)"
+        required: false
+        default: "false"
+      selftest:
+        description: "Build a real reel but DO NOT upload; print a quality report (true/false)"
+        required: false
+        default: "false"
+      days:
+        description: "Number of days to generate for"
+        required: false
+        default: "1"
+      per_day:
+        description: "Reels per day"
+        required: false
+        default: "1"
+      upload_youtube:
+        description: "Upload generated reels to YouTube"
+        required: false
+        default: "true"
+      upload_instagram:
+        description: "Upload to Instagram (risky, off by default)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: krishna-auto-reel
+  cancel-in-progress: false
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+      # contents: write (was read) so the no-repeat rotation state in
+      # history.json can be pushed back. Without this every run starts from a
+      # blank history and the whole no-repeat guarantee is lost.
+      contents: write
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Clean up old artifacts (free Actions storage)
+        # Reels are already published to YouTube, so old artifacts are just
+        # dead weight that fills the 0.5 GB free quota. Delete them every run
+        # so storage never fills up again.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Deleting old workflow artifacts to free storage..."
+          gh api --paginate "repos/${{ github.repository }}/actions/artifacts" \
+            -q '.artifacts[].id' | while read -r id; do
+              [ -n "$id" ] && gh api -X DELETE \
+                "repos/${{ github.repository }}/actions/artifacts/$id" \
+                && echo "deleted artifact $id" || true
+            done
+          echo "Artifact cleanup done."
+
+      - name: Delete workflow runs older than 2 days
+        # Artifacts are already cleaned above; this clears the RUN HISTORY, which
+        # otherwise grows by ~150 entries a month and makes the Actions tab
+        # unusable for finding a real failure.
+        #
+        # Retention is 2 DAYS on purpose (owner's call): a scheduled reel either
+        # published or it did not, and that is visible on YouTube within minutes,
+        # so there is nothing to debug in a run from last week. Only `completed`
+        # runs are eligible, so an in-progress build is never deleted.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CUTOFF=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "Deleting completed workflow runs created before $CUTOFF"
+          DELETED=0
+          # Oldest first so a capped page still removes the most useful ones.
+          for id in $(gh api --paginate \
+                "repos/${{ github.repository }}/actions/runs?per_page=100&status=completed" \
+                -q ".workflow_runs[] | select(.created_at < \"$CUTOFF\") | .id" \
+                | head -200); do
+            if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$id" >/dev/null 2>&1; then
+              DELETED=$((DELETED+1))
+            fi
+          done
+          echo "Deleted $DELETED old workflow run(s)."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Secret/source diagnostic (NO video)
+        if: ${{ github.event.inputs.diagnose_only == 'true' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests==2.32.3 google-generativeai==0.8.3 python-dotenv==1.0.1
+          python diagnose.py
+
+      - name: Install system dependencies
+        if: ${{ github.event.inputs.diagnose_only != 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core
+          POLICY="/etc/ImageMagick-6/policy.xml"
+          if [ -f "$POLICY" ]; then
+            sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' "$POLICY" || true
+            sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"\/>//' "$POLICY" || true
+          fi
+
+      - name: Download royalty-free music tracks
+        if: ${{ github.event.inputs.diagnose_only != 'true' }}
+        run: |
+          mkdir -p assets/music
+          SUCCESS=0
+          download_track() {
+            local fname="$1" url="$2" dest="assets/music/$1"
+            curl -fsSL -A "Mozilla/5.0" --max-time 60 -o "$dest" "$url" 2>/dev/null || { rm -f "$dest"; echo "SKIP $fname"; return 1; }
+            local size; size=$(stat -c%s "$dest" 2>/dev/null || echo 0)
+            if [ "$size" -le 20000 ]; then rm -f "$dest"; echo "SKIP $fname (too small)"; return 1; fi
+            if head -c 32 "$dest" | grep -qiE "<!doctype|<html|<\?xml"; then
+              rm -f "$dest"; echo "SKIP $fname (not audio)"; return 1
+            fi
+            echo "OK $fname"; return 0
+          }
+          download_track "01_happy_ukulele.mp3"  "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bda.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "02_uplifting_pop.mp3"  "https://cdn.pixabay.com/download/audio/2022/03/24/audio_2cba25c436.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "03_feel_good.mp3"      "https://cdn.pixabay.com/download/audio/2022/10/30/audio_c8f4bb65b0.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "04_sunny_day.mp3"      "https://cdn.pixabay.com/download/audio/2023/02/28/audio_bb6f9a5552.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "05_cheerful.mp3"       "https://cdn.pixabay.com/download/audio/2022/08/31/audio_1c9e73e5cf.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "06_positive_vibes.mp3" "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "07_kids_joy.mp3"       "https://cdn.pixabay.com/download/audio/2023/01/16/audio_8b576799c1.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "08_sweet_moments.mp3"  "https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          download_track "09_warm_heart.mp3"     "https://cdn.pixabay.com/download/audio/2021/08/08/audio_dc39bde6cf.mp3"  && SUCCESS=$((SUCCESS+1)) || true
+          echo "Music ready: $SUCCESS / 9 tracks"
+          if [ "$SUCCESS" -le 1 ]; then echo "WARNING: <=1 track downloaded -> reels would repeat the same music. Check these Pixabay links."; fi
+          ls -la assets/music/
+
+      - name: Install Python dependencies
+        if: ${{ github.event.inputs.diagnose_only != 'true' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Determine run parameters
+        if: ${{ github.event.inputs.diagnose_only != 'true' }}
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "days=1" >> "$GITHUB_OUTPUT"
+            echo "per_day=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
+            echo "per_day=${{ github.event.inputs.per_day }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate reel(s)
+        if: ${{ github.event.inputs.diagnose_only != 'true' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          python generate.py --days "${{ steps.params.outputs.days }}" --per-day "${{ steps.params.outputs.per_day }}"
+
+      - name: Selftest quality report (NO upload)
+        if: ${{ always() && github.event.inputs.selftest == 'true' }}
+        run: |
+          echo "================= SELFTEST QUALITY REPORT ================="
+          ls -la output/ || true
+          cat manifest.json || true
+          for f in output/*.mp4; do
+            [ -f "$f" ] || continue
+            echo ">>> $f"
+            ffprobe -v error -select_streams v:0 \
+              -show_entries stream=width,height,codec_name,bit_rate,avg_frame_rate \
+              -show_entries format=duration,size,bit_rate \
+              -of default=noprint_wrappers=1 "$f" || true
+          done
+          echo "=========================================================="
+          exit 1
+
+      - name: Upload to YouTube
+        if: ${{ github.event.inputs.diagnose_only != 'true' && github.event.inputs.selftest != 'true' && (github.event_name == 'schedule' || github.event.inputs.upload_youtube == 'true') }}
+        env:
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
+        run: |
+          python upload_youtube.py --limit "${{ steps.params.outputs.per_day }}" --privacy public
+
+      - name: Upload to Instagram (optional)
+        if: ${{ github.event.inputs.diagnose_only != 'true' && github.event.inputs.selftest != 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_instagram == 'true' }}
+        env:
+          IG_USERNAME: ${{ secrets.IG_USERNAME }}
+          IG_PASSWORD: ${{ secrets.IG_PASSWORD }}
+        run: |
+          python upload_instagram.py --limit "${{ steps.params.outputs.per_day }}"
+
+      - name: Save no-repeat history back to the repo
+        # WHY: modules/history.py guarantees that a story topic, spoken hook,
+        # screen hook, flash phrase, narrator voice or title pattern is never
+        # reused until its pool is exhausted. That guarantee lives in
+        # history.json, and every Actions run gets a fresh checkout - so unless
+        # the file is pushed back, each run starts from an empty history and
+        # repeats come straight back.
+        #
+        # Runs on always() so the rotation is still recorded when the upload step
+        # failed: the reel was generated either way, and re-serving that topic
+        # would be worse than losing it.
+        #
+        # continue-on-error because a git conflict must never be reported as a
+        # failed video. The reel is already on YouTube by this point.
+        if: ${{ always() && github.event.inputs.diagnose_only != 'true' && github.event.inputs.selftest != 'true' }}
+        continue-on-error: true
+        run: |
+          set -u
+          if [ ! -f history.json ]; then
+            echo "No history.json produced; nothing to save."
+            exit 0
+          fi
+          git add history.json
+          if git diff --cached --quiet -- history.json; then
+            echo "history.json unchanged; nothing to commit."
+            exit 0
+          fi
+          # -c rather than `git config` so no persistent config is written.
+          git -c user.name="krishna-bot" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "chore: record content rotation history [skip ci]"
+          # Concurrent runs (a reel and the long-form job) can race. Rebase and
+          # retry rather than clobbering the other pipeline's history file.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "history.json pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push rejected; rebasing onto the remote (attempt $attempt)."
+            git pull --rebase --autostash || true
+          done
+          echo "Could not push history.json after 5 attempts; the next run will retry."
+
+      - name: Upload artifacts (manual/debug runs only)
+        # Scheduled daily reels already publish to YouTube, so we DON'T keep
+        # any artifacts for them — this stops GitHub Actions storage from
+        # filling up (free quota is only 0.5 GB). Artifacts are kept only for
+        # manual debug runs, and auto-deleted after 1 day.
+        if: ${{ always() && github.event.inputs.diagnose_only != 'true' && github.event_name != 'schedule' }}
+        # Never fail the whole run if storage is momentarily full: GitHub
+        # recalculates the storage quota only every 6-12 hours, so right after
+        # the cleanup step the quota can still read "full" and block the upload.
+        # The reel is already on YouTube, so this backup is optional.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: krishna-reels
+          path: |
+            output/*.mp4
+            manifest.json
+          if-no-files-found: ignore
+          retention-days: 1

@@ -1,0 +1,106 @@
+name: Slot Report (which upload time actually works)
+
+# ============================================================================
+# WHAT THIS DOES
+#
+# Groups every published video by the hour it went live in US Eastern and reports
+# the MEDIAN views per slot, so the upload schedule can be tuned on data instead
+# of on a hunch. A morning slot was removed from the reel schedule once because it
+# "got almost no views" - that call was made by eye, and at the time every video
+# shared an identical title and had no on-screen text, so the slot was never
+# fairly tested.
+#
+# Read the MEDIAN, not the mean: one lucky video makes a dead slot look healthy.
+# A slot needs roughly 8-10 videos before its number means anything, so give a new
+# schedule about two weeks before judging it.
+#
+# The report prints straight into the workflow log - open the run and read it.
+#
+# This workflow is READ-ONLY. It fetches statistics and changes nothing.
+# It is MANUAL ONLY and is never scheduled.
+#
+# SETUP: needs the same YT_MANAGE_TOKEN_JSON secret as "Fix Old Video Titles".
+# ============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: "Which videos to include"
+        required: true
+        type: choice
+        default: "shorts"
+        options:
+          - shorts
+          - longform
+          - all
+      videos:
+        description: "How many recent videos to analyse"
+        required: false
+        default: "200"
+      detail:
+        description: "Also list every individual video under its slot"
+        required: false
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: krishna-slot-report
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Only the YouTube API client is needed; no media libraries.
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            google-api-python-client==2.137.0 \
+            google-auth==2.32.0 \
+            google-auth-oauthlib==1.2.1 \
+            google-auth-httplib2==0.2.0 \
+            requests==2.32.3 \
+            python-dotenv==1.0.1
+
+      - name: Check the management token is present
+        env:
+          YT_MANAGE_TOKEN_JSON: ${{ secrets.YT_MANAGE_TOKEN_JSON }}
+        run: |
+          if [ -z "${YT_MANAGE_TOKEN_JSON}" ]; then
+            echo "::error::Secret YT_MANAGE_TOKEN_JSON is not set."
+            echo "Reading your own channel statistics needs a broader scope than"
+            echo "uploading. See TOKEN_SETUP.md for the browser-only steps."
+            exit 1
+          fi
+          echo "Management token found."
+
+      - name: Build the slot report
+        env:
+          YT_MANAGE_TOKEN_JSON: ${{ secrets.YT_MANAGE_TOKEN_JSON }}
+        run: |
+          ARGS="--max ${{ github.event.inputs.videos }}"
+          case "${{ github.event.inputs.filter }}" in
+            shorts)   ARGS="$ARGS --shorts-only" ;;
+            longform) ARGS="$ARGS --longform-only" ;;
+          esac
+          if [ "${{ github.event.inputs.detail }}" = "true" ]; then
+            ARGS="$ARGS --detail"
+          fi
+          python slot_report.py $ARGS

@@ -1,0 +1,11 @@
+# Drop a royalty-free background music track here (e.g. soft-piano.mp3).
+# The video composer automatically mixes the FIRST audio file it finds in this
+# folder under the voiceover at ~12% volume (configurable: config.music.volume).
+#
+# Where to get FREE, copyright-safe music:
+#   * YouTube Audio Library (https://studio.youtube.com -> Audio Library)
+#   * Pixabay Music (https://pixabay.com/music/)
+#   * Free Music Archive (https://freemusicarchive.org/)
+#
+# Supported extensions: .mp3 .m4a .wav .ogg .aac
+# Actual audio files in this folder are gitignored; only this .gitkeep is kept.
