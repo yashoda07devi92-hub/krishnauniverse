@@ -1,6 +1,6 @@
 """Krishna Universe - automation modules package.
 
-A faceless YouTube Shorts pipeline for heartwarming cute pets & babies
+A faceless Hindi YouTube Shorts pipeline for Krishna leelas and their seekh
 content. All components use FREE + open-source tools only.
 """
 
