@@ -926,17 +926,29 @@ def _find_music_track():
 
 
 def _synth_background_music(duration, fps=44100):
-    """Generate an UPLIFTING ANTHEM-style music bed — 4 rotating styles.
+    """Generate a DEVOTIONAL Indian music bed - 4 rotating styles.
 
-    All styles are inspired by feel-good "la la laa" Olympic/viral anthem
-    energy that matches cute pet + baby content perfectly:
+    WHY THIS WAS REWRITTEN
+    ----------------------
+    The version this replaces generated "uplifting anthem" beds - a bright major
+    "la la laa" melody, a celebratory 4-beat march, a viral pop hook and an
+    Olympic-style swell. That suited the cute-pets channel it was written for.
+    Under a Hindi Krishna katha it is actively wrong: a triumphant pop hook
+    playing under the story of Gandhari's curse reads as disrespectful, and it is
+    the kind of mismatch a viewer notices in the first two seconds even if they
+    cannot name it.
 
-      Style 0 — "La La Laa" Anthem : bright ascending melody, triumphant feel
-      Style 1 — Heartwarming March  : bold 4-beat march, warm + celebratory
-      Style 2 — Viral Pop Hook      : catchy repeating 4-note hook, energetic
-      Style 3 — Olympic Swell       : grand rising theme, emotional + epic
+    All four styles below are built on a sustained tanpura-style drone (Sa + Pa)
+    with a slow bansuri-like melody drawn from a pentatonic raga scale. There is
+    no percussion on the downbeat and no rising "anthem" figure, because the
+    narration - not the music - is meant to carry the video.
 
-    Rotates randomly each run. Drop a real .mp3 in assets/music to override.
+      Style 0 - Bansuri over drone      (Raag Bhoopali: Sa Re Ga Pa Dha)
+      Style 1 - Temple morning          (drone + soft distant bell strikes)
+      Style 2 - Sandhya aarti           (deeper drone, slow sustained melody)
+      Style 3 - Meditative drone        (almost no melody, gentle swells)
+
+    Drop real .mp3 files in assets/music to override this entirely.
     """
     try:
         import numpy as np
@@ -946,95 +958,80 @@ def _synth_background_music(duration, fps=44100):
         n = int(duration * fps)
         t = np.linspace(0.0, duration, n, endpoint=False)
         style = random.randint(0, 3)
-        log.info("Anthem music style: %d", style)
+        log.info("Devotional music style: %d", style)
+
+        # Sa = C3 (low, so it sits under a male narration voice rather than
+        # fighting it). Ratios are just intonation, which is how a tanpura is
+        # actually tuned - equal temperament sounds subtly "off" for this.
+        SA = 130.81
+        RE = SA * 9 / 8
+        GA = SA * 5 / 4
+        MA = SA * 4 / 3
+        PA = SA * 3 / 2
+        DHA = SA * 5 / 3
+        SA_HI = SA * 2
+
+        def drone(amount=0.30):
+            """Tanpura-ish: Sa + Pa + Sa-octave, very slowly beating."""
+            d = np.zeros(n)
+            for freq, gain in ((SA, 1.0), (PA, 0.55), (SA_HI, 0.35)):
+                # Two detuned voices per note give the slow shimmer a real
+                # tanpura has; a single sine sounds like a test tone.
+                d += gain * np.sin(2 * np.pi * freq * t)
+                d += gain * 0.7 * np.sin(2 * np.pi * (freq * 1.0015) * t)
+            # Gentle swell so the bed breathes instead of sitting flat.
+            d *= 0.85 + 0.15 * np.sin(2 * np.pi * t / 7.0)
+            return amount * d / 3.0
+
+        def melody(notes, note_dur, gain=0.30, breath=2.5):
+            """Slow flute-like line: soft attack, long decay, no hard onset."""
+            idx = (t / note_dur).astype(int) % len(notes)
+            freq = np.array([notes[i] for i in idx])
+            phase = (t / note_dur) % 1.0
+            # Soft attack (a flute does not start instantly) + slow decay.
+            attack = np.clip(phase / 0.18, 0.0, 1.0)
+            decay = np.exp(-breath * phase)
+            env = attack * decay
+            # A touch of second harmonic gives it a wooden, airy timbre.
+            w = np.sin(2 * np.pi * freq * t) + 0.25 * np.sin(2 * np.pi * 2 * freq * t)
+            return gain * env * w
+
+        def bells(period=6.0, gain=0.16):
+            """Distant temple bell every `period` seconds."""
+            phase = t % period
+            env = np.exp(-2.2 * phase)
+            b = np.sin(2 * np.pi * 1046.50 * t) + 0.6 * np.sin(2 * np.pi * 1567.98 * t)
+            return gain * env * b
 
         if style == 0:
-            # --- "La La Laa" Anthem: ascending bright melody (C-E-G-A-C) ---
-            # Mimics the iconic happy "la la la" viral anthem feel
-            melody = [261.63, 329.63, 392.00, 440.00, 523.25,  # C E G A C (up)
-                      440.00, 392.00, 329.63, 261.63, 329.63]  # A G E C E (down)
-            note_dur = 0.30
-            note_idx = (t / note_dur).astype(int) % len(melody)
-            freq_arr = np.array([melody[i] for i in note_idx])
-            phase_in = (t / note_dur) % 1.0
-            # Bell-like: quick attack, slow decay
-            env = np.exp(-3.0 * phase_in)
-            wave = 0.55 * env * np.sin(2 * np.pi * freq_arr * t)
-            # Harmony a third below
-            harm = np.array([f * 0.794 for f in freq_arr])
-            wave += 0.3 * env * np.sin(2 * np.pi * harm * t)
-            # Warm bass pulse on beat
-            beat = (t * (1.0 / 0.6)) % 1.0
-            bass_env = np.exp(-8.0 * beat)
-            wave += 0.25 * bass_env * np.sin(2 * np.pi * 130.81 * t)
-
+            # Raag Bhoopali (Sa Re Ga Pa Dha) - the classic evening pentatonic.
+            wave = drone(0.30) + melody(
+                [SA, RE, GA, PA, DHA, PA, GA, RE], 0.85, gain=0.30
+            )
         elif style == 1:
-            # --- Heartwarming March: bold 4-beat, warm + celebratory ---
-            # G-major feel, steady rhythm like happy parade
-            chord_notes = [392.00, 493.88, 587.33]  # G B D
-            wave = np.zeros(n)
-            for freq in chord_notes:
-                wave += (0.4 / len(chord_notes)) * np.sin(2 * np.pi * freq * t)
-            # 4-beat march accent
-            beat4 = (t * 2.0) % 1.0
-            accent = np.exp(-12.0 * beat4)
-            wave *= (0.7 + 0.3 * accent)
-            # Melodic top line
-            top = [392.00, 440.00, 493.88, 523.25, 493.88, 440.00]
-            top_dur = 0.4
-            top_idx = (t / top_dur).astype(int) % len(top)
-            top_freq = np.array([top[i] for i in top_idx])
-            top_env = np.exp(-5.0 * ((t / top_dur) % 1.0))
-            wave += 0.35 * top_env * np.sin(2 * np.pi * top_freq * t)
-
+            wave = drone(0.28) + melody([GA, PA, DHA, SA_HI, DHA, PA], 1.0, gain=0.24)
+            wave += bells(period=6.5)
         elif style == 2:
-            # --- Viral Pop Hook: catchy 4-note loop, high energy ---
-            # Simple iconic hook: C-G-A-F (same chords as many viral songs)
-            hook = [523.25, 392.00, 440.00, 349.23]  # C G A F
-            hook_dur = 0.4
-            h_idx = (t / hook_dur).astype(int) % len(hook)
-            h_freq = np.array([hook[i] for i in h_idx])
-            h_env = np.exp(-4.0 * ((t / hook_dur) % 1.0))
-            wave = 0.6 * h_env * np.sin(2 * np.pi * h_freq * t)
-            # Octave doubling for richness
-            wave += 0.3 * h_env * np.sin(2 * np.pi * h_freq * 2 * t)
-            # Energetic beat (every 0.4s)
-            beat_e = (t / hook_dur) % 1.0
-            kick = 0.35 * np.exp(-15.0 * beat_e) * np.sin(2 * np.pi * 85 * t)
-            wave += kick
-
+            # Slower, lower, more solemn - for the heavier leelas.
+            wave = drone(0.34) + melody([SA, GA, MA, PA, MA, GA], 1.35, gain=0.22, breath=1.6)
         else:
-            # --- Olympic Swell: grand rising anthem, emotional + epic ---
-            # Starts humble, builds to triumphant peak
-            rise = np.clip(t / (duration * 0.7), 0.0, 1.0)
-            # Foundation chord
-            base_notes = [(130.81, 0.45), (196.00, 0.40), (261.63, 0.35)]
-            # Rising melody notes that appear as swell builds
-            high_notes = [(523.25, 0.30), (659.25, 0.25), (783.99, 0.20)]
-            wave = np.zeros(n)
-            for freq, amp in base_notes:
-                wave += amp * np.sin(2 * np.pi * freq * t)
-            for freq, amp in high_notes:
-                wave += amp * rise * np.sin(2 * np.pi * freq * t)
-            # Heroic 8-beat pulse
-            pulse = 0.8 + 0.2 * np.sin(2 * np.pi * t * (120 / 60) * 0.5)
-            wave *= pulse
-            # Dramatic hit at peak
-            hit_t = duration * 0.7
-            hit_mask = np.exp(-20.0 * np.abs(t - hit_t))
-            wave += 0.4 * hit_mask * np.sin(2 * np.pi * 523.25 * t)
+            # Nearly pure drone. The quietest option, and the safest bed under a
+            # narration that is doing all the work.
+            wave = drone(0.38) + melody([SA, PA, SA_HI], 3.0, gain=0.12, breath=1.0)
 
-        # Normalize + fade in/out
+        # Normalise, then fade in/out so the bed never clicks at a cut.
         peak = float(np.max(np.abs(wave))) or 1.0
-        wave /= peak
-        fade_in  = min(int(0.8 * fps), n // 5)
+        wave = wave / peak * 0.9
+        fade_in = min(int(1.2 * fps), n // 4)
         fade_out = min(int(1.5 * fps), n // 4)
-        if fade_in  > 0: wave[:fade_in]   *= np.linspace(0.0, 1.0, fade_in)
-        if fade_out > 0: wave[-fade_out:]  *= np.linspace(1.0, 0.0, fade_out)
+        if fade_in > 0:
+            wave[:fade_in] *= np.linspace(0.0, 1.0, fade_in)
+        if fade_out > 0:
+            wave[-fade_out:] *= np.linspace(1.0, 0.0, fade_out)
 
         stereo = np.column_stack([wave, wave]).astype(np.float32)
         clip = AudioArrayClip(stereo, fps=fps).set_duration(duration)
-        log.info("Synthesized %.1fs anthem music (style %d).", duration, style)
+        log.info("Synthesized %.1fs devotional music (style %d).", duration, style)
         return clip
 
     except Exception as exc:
@@ -1043,11 +1040,20 @@ def _synth_background_music(duration, fps=44100):
 
 
 def _synth_hook_sting(duration=2.5, fps=44100):
-    """Short punchy 'sting' sound for the hook window (first ~4s).
+    """Short devotional accent for the hook window (first ~2.5s).
 
-    A crisp rising impact + bright shimmer — gives the hook text a satisfying
-    'arrival' feel without being loud or jarring. Randomly picks one of two
-    sting flavours each run.
+    WHY THIS WAS REWRITTEN
+    ----------------------
+    The previous sting was a rising "whoosh + chime" or a "low punch + sparkle" -
+    a trailer-style impact. Over the opening of a Krishna katha that sounds like
+    a gaming montage. Replaced with two accents that belong to this niche:
+
+      Flavour 0 - Temple bell (ghanti): a struck bell with its natural
+                  inharmonic partials, ringing out over ~2s.
+      Flavour 1 - Conch (shankh): a breathy sustained tone with a soft swell,
+                  the sound that traditionally opens a recitation.
+
+    Kept quiet and short - it marks the opening, it does not announce it.
     """
     try:
         import numpy as np
@@ -1058,26 +1064,39 @@ def _synth_hook_sting(duration=2.5, fps=44100):
         flavour = random.randint(0, 1)
 
         if flavour == 0:
-            # Rising "whoosh + chime": frequency sweeps up fast, then bright chime rings
-            sweep_dur = 0.25
-            sweep = np.exp(-15.0 * t) * np.sin(2 * np.pi * (200 + 1200 * t / sweep_dur) * t)
-            chime_freq = 1046.50  # C6
-            chime = np.exp(-4.0 * np.maximum(t - 0.2, 0)) * np.sin(2 * np.pi * chime_freq * t)
-            chime2 = 0.5 * np.exp(-5.0 * np.maximum(t - 0.25, 0)) * np.sin(2 * np.pi * 1318.51 * t)
-            wave = 0.5 * sweep + 0.6 * chime + 0.3 * chime2
+            # Temple bell. A real bell's overtones are NOT integer multiples of
+            # the fundamental - that inharmonicity is what makes it read as metal
+            # rather than as a sine beep, so the ratios below are deliberate.
+            fundamental = 523.25
+            partials = ((1.0, 1.0, 3.0), (2.76, 0.5, 4.5), (5.40, 0.25, 6.0),
+                        (8.93, 0.12, 8.0))
+            wave = np.zeros(n)
+            for ratio, gain, decay in partials:
+                wave += gain * np.exp(-decay * t) * np.sin(2 * np.pi * fundamental * ratio * t)
+            # Slow tremolo as the bell body rings.
+            wave *= 1.0 + 0.05 * np.sin(2 * np.pi * 4.5 * t)
         else:
-            # "Punch + sparkle": low thump at start, then high sparkle
-            thump = np.exp(-30.0 * t) * np.sin(2 * np.pi * 90 * t)
-            sparkle_freq = 880.0
-            sparkle = np.exp(-6.0 * np.maximum(t - 0.1, 0)) * np.sin(2 * np.pi * sparkle_freq * t)
-            sparkle2 = 0.4 * np.exp(-8.0 * np.maximum(t - 0.15, 0)) * np.sin(2 * np.pi * 1108.73 * t)
-            wave = 0.7 * thump + 0.5 * sparkle + 0.3 * sparkle2
+            # Conch: a low breathy tone that swells in, plus filtered noise for
+            # the breath. Attack is slow on purpose - a shankh has no transient.
+            base = 233.08
+            swell = np.clip(t / 0.45, 0.0, 1.0) * np.exp(-1.1 * np.maximum(t - 0.45, 0))
+            wave = swell * (
+                np.sin(2 * np.pi * base * t)
+                + 0.45 * np.sin(2 * np.pi * base * 2 * t)
+                + 0.20 * np.sin(2 * np.pi * base * 3 * t)
+            )
+            # Breath noise, smoothed so it is air rather than hiss.
+            rng_local = np.random.default_rng()
+            noise = rng_local.normal(0.0, 1.0, n)
+            kernel = np.ones(64) / 64.0
+            noise = np.convolve(noise, kernel, mode="same")
+            wave += 0.10 * swell * noise
 
-        # Normalize + short fade out
         peak = float(np.max(np.abs(wave))) or 1.0
-        wave /= peak
-        fade = min(int(0.4 * fps), n // 3)
-        wave[-fade:] *= np.linspace(1.0, 0.0, fade)
+        wave = wave / peak
+        fade = min(int(0.5 * fps), n // 3)
+        if fade > 0:
+            wave[-fade:] *= np.linspace(1.0, 0.0, fade)
 
         stereo = np.column_stack([wave, wave]).astype(np.float32)
         return AudioArrayClip(stereo, fps=fps).set_duration(duration)
