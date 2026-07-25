@@ -71,13 +71,25 @@ def _fit_cover(clip, target_w=None, target_h=None):
         return clip.resize((tw, th))
 
     scale = max(tw / float(cw), th / float(ch))
-    new_w = int(cw * scale)
-    new_h = int(ch * scale)
+    new_w = int(round(cw * scale))
+    new_h = int(round(ch * scale))
     # Force EVEN dimensions. Odd width/height encoded as yuv420p (chroma
-    # subsampling) is a classic cause of coloured / "rainbow" fringing along
-    # the edges, so we round each side up to the nearest even number.
-    new_w += new_w % 2
-    new_h += new_h % 2
+    # subsampling) is a classic cause of coloured / "rainbow" fringing along the
+    # edges.
+    #
+    # Rounding each side up INDEPENDENTLY quietly changes the aspect ratio by up
+    # to a pixel on each axis, which is a real (if small) stretch. So the scale is
+    # recomputed from whichever side had to grow, and the other side follows it -
+    # the extra pixels then come off in the crop below instead of distorting the
+    # image.
+    if new_w % 2 or new_h % 2:
+        new_w += new_w % 2
+        new_h += new_h % 2
+        adjusted = max(new_w / float(cw), new_h / float(ch))
+        new_w = int(round(cw * adjusted))
+        new_h = int(round(ch * adjusted))
+        new_w += new_w % 2
+        new_h += new_h % 2
     clip = clip.resize((new_w, new_h))
     try:
         clip = crop(clip, width=tw, height=th, x_center=new_w / 2, y_center=new_h / 2)
@@ -138,37 +150,45 @@ def _concat_with_crossfade(segments, duration):
 # slideshow: the eye recognises the same move repeating and stops believing the
 # frame is real. Rotating through translations and zooms, with a different one
 # per scene, is what mythology channels use to make stills feel filmed.
+# Every move now combines a TRANSLATION with a ZOOM. Previously 8 of the 10 were
+# pure pans with no scale change at all, and a frame that only slides reads as a
+# photo being dragged - which is exactly the "slideshow" complaint. A simultaneous
+# push or pull is what makes it read as a camera.
 _MOVES = (
     "push_in", "pull_out",
-    "pan_left", "pan_right",
-    "tilt_up", "tilt_down",
-    "diag_ul", "diag_dr",
-    "pan_zoom_left", "pan_zoom_right",
+    "pan_left_in", "pan_right_in",
+    "pan_left_out", "pan_right_out",
+    "tilt_up_in", "tilt_down_in",
+    "diag_ul_in", "diag_dr_out",
 )
 
 
+def _ease(f):
+    """Ease-in-out. A linear move starts and stops abruptly, which looks
+    mechanical; real camera moves accelerate and settle."""
+    return f * f * (3.0 - 2.0 * f)
+
+
 def _motion_from_image(path, duration, move=None):
-    """Animate a still with a real camera move. Returns a WxH clip.
+    """Animate a still with a combined pan + zoom. Returns a WxH clip.
 
     HOW IT WORKS
     ------------
-    The image is first fitted to an OVERSCANNED frame (default 1.28x), which
-    leaves spare pixels outside the visible area. The clip is then translated
-    inside a WxH composite, so pixels genuinely move across the frame rather
-    than just scaling about the centre.
+    ai_images already delivers the frame at the OVERSCANNED size, so there are
+    spare pixels outside the visible area and nothing needs upscaling here. The
+    clip is translated inside a WxH composite while being scaled, so pixels move
+    across the frame AND the framing tightens or opens at the same time.
 
-    Pure translations (pan/tilt/diagonal) deliberately skip moviepy's per-frame
-    `resize`, which resamples the full 1382x2458 image on every one of ~54 frames
-    and is by far the most expensive thing in the render. Only the zoom moves pay
-    that cost, so most segments are cheap.
+    The move is eased rather than linear, and every move carries a zoom, so no
+    segment sits still.
     """
     from moviepy.editor import CompositeVideoClip, ImageClip
 
     if move is None:
         move = random.choice(_MOVES)
 
-    over = float(get_cfg("motion.overscan", 1.28))
-    zoom = float(get_cfg("motion.zoom_amount", 0.10))
+    over = float(get_cfg("motion.overscan", 1.18))
+    zoom = float(get_cfg("motion.zoom_amount", 0.16))
     ow = int(W * over)
     oh = int(H * over)
     ow += ow % 2
@@ -181,107 +201,49 @@ def _motion_from_image(path, duration, move=None):
         log.warning("Could not load scene image %s (%s).", path, exc)
         return None
 
-    # Travel room: how far the oversized image can slide before an edge shows.
     slack_x = max(0, ow - W)
     slack_y = max(0, oh - H)
     cx = -slack_x / 2.0
     cy = -slack_y / 2.0
 
     def frac(t):
-        return min(1.0, max(0.0, (t / duration) if duration else 0.0))
+        return _ease(min(1.0, max(0.0, (t / duration) if duration else 0.0)))
+
+    # Direction of travel for this move, as a fraction of the available slack.
+    dx, dy = 0.0, 0.0
+    if "pan_left" in move or "diag_ul" in move:
+        dx = -1.0
+    elif "pan_right" in move or "diag_dr" in move:
+        dx = 1.0
+    if "tilt_up" in move or "diag_ul" in move:
+        dy = -1.0
+    elif "tilt_down" in move or "diag_dr" in move:
+        dy = 1.0
+
+    zooming_in = move.endswith("_in") or move == "push_in"
 
     try:
-        if move in ("push_in", "pull_out"):
-            # Scale about the centre. Needs per-frame resize.
-            def scale(t):
-                f = frac(t)
-                if move == "push_in":
-                    return 1.0 + zoom * f
-                return (1.0 + zoom) - zoom * f
+        def scale(t):
+            f = frac(t)
+            return 1.0 + zoom * f if zooming_in else (1.0 + zoom) - zoom * f
 
-            seg = base.resize(scale).set_position(("center", "center"))
-            return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
-
-        if move in ("pan_zoom_left", "pan_zoom_right"):
-            direction = -1.0 if move == "pan_zoom_left" else 1.0
-
-            def scale2(t):
-                return 1.0 + zoom * frac(t)
-
-            def pos2(t):
-                f = frac(t)
-                x = cx + direction * (slack_x / 2.0) * f
-                return (x, cy)
-
-            seg = base.resize(scale2).set_position(pos2)
-            return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
-
-        # Pure translations - no resize, so these are the cheap ones.
         def pos(t):
             f = frac(t)
-            if move == "pan_left":
-                return (cx - (slack_x / 2.0) * f, cy)
-            if move == "pan_right":
-                return (cx + (slack_x / 2.0) * f, cy)
-            if move == "tilt_up":
-                return (cx, cy - (slack_y / 2.0) * f)
-            if move == "tilt_down":
-                return (cx, cy + (slack_y / 2.0) * f)
-            if move == "diag_ul":
-                return (cx - (slack_x / 2.0) * f, cy - (slack_y / 2.0) * f)
-            if move == "diag_dr":
-                return (cx + (slack_x / 2.0) * f, cy + (slack_y / 2.0) * f)
-            return (cx, cy)
+            return (cx + dx * (slack_x / 2.0) * f,
+                    cy + dy * (slack_y / 2.0) * f)
 
-        seg = base.set_position(pos)
+        seg = base.resize(scale)
+        # A pure zoom stays centred; anything with travel uses the position fn.
+        seg = seg.set_position(("center", "center")) if (dx == 0.0 and dy == 0.0) \
+            else seg.set_position(pos)
         return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
     except Exception as exc:
-        log.warning("Motion move %r failed for %s (%s); using static frame.", move, path, exc)
+        log.warning("Motion move %r failed for %s (%s); using static frame.",
+                    move, path, exc)
         try:
             return _fit_cover(ImageClip(path).set_duration(duration))
         except Exception:
             return None
-
-
-def _video_background(clip_paths, duration):
-    """Concatenate / loop Pexels video clips with FAST CUTS to fill `duration`.
-
-    Segments are joined with short crossfades for smooth, polished motion.
-    """
-    from moviepy.editor import VideoFileClip
-
-    cut = get_cfg("video.clip_cut_seconds", 3.0)
-    xfade = float(get_cfg("transitions.crossfade_seconds", 0.35))
-    segments = []
-    total = 0.0
-    idx = 0
-    guard = 0
-    while clip_paths and guard < 200:
-        # Account for crossfade overlap shrinking the composed length.
-        effective = total - max(0, len(segments) - 1) * xfade
-        if effective >= duration:
-            break
-        guard += 1
-        path = clip_paths[idx % len(clip_paths)]
-        idx += 1
-        try:
-            vc = VideoFileClip(path, audio=False)
-        except Exception as exc:
-            log.warning("Could not open clip %s (%s); skipping.", path, exc)
-            continue
-        seg_dur = min(cut, vc.duration or cut)
-        if seg_dur <= 0:
-            vc.close()
-            continue
-        seg = vc.subclip(0, seg_dur)
-        seg = _fit_cover(seg)
-        segments.append(seg)
-        total += seg_dur
-    if not segments:
-        raise RuntimeError("No usable video segments.")
-    bg = _concat_with_crossfade(segments, duration)
-    bg = bg.set_duration(duration)
-    return bg
 
 
 def _images_background(image_paths, duration):
@@ -716,6 +678,120 @@ def _build_caption_clips(text, duration):
 # ==========================================================================
 # Mid-video FLASH phrases
 # ==========================================================================
+def _build_film_grain(duration):
+    """A faint moving grain layer over the whole reel.
+
+    WHY: generated frames are unnaturally CLEAN - no sensor noise, no texture -
+    and that cleanliness is a large part of why animated stills read as a
+    slideshow rather than as footage. A little moving grain gives every frame
+    something that changes even when the camera move is slow, and it is the
+    cheapest cinematic cue available.
+
+    Deliberately generated at a fraction of the frame size and scaled up, so the
+    grain is soft rather than a pixel-level fizz, and so it costs almost nothing.
+    """
+    if not get_cfg("grain.enabled", True):
+        return []
+    try:
+        import numpy as np
+        from moviepy.editor import VideoClip
+
+        strength = float(get_cfg("grain.opacity", 0.07))
+        if strength <= 0:
+            return []
+        small_w = max(8, W // 6)
+        small_h = max(8, H // 6)
+        rng = np.random.default_rng(random.randint(1, 1_000_000))
+        # A handful of pre-rendered plates cycled over time: regenerating noise
+        # every frame is slow, and a fixed plate would look like a dirty lens.
+        plates = [rng.normal(128, 34, (small_h, small_w)).clip(0, 255).astype("uint8")
+                  for _ in range(6)]
+
+        def make_frame(t):
+            plate = plates[int(t * 12) % len(plates)]
+            return np.dstack([plate] * 3)
+
+        grain = VideoClip(make_frame, duration=duration)
+        grain = grain.resize((W, H)).set_opacity(strength)
+        log.info("Film grain layer at %.0f%% opacity.", strength * 100)
+        return [grain]
+    except Exception as exc:
+        log.warning("Film grain failed (%s); skipping.", exc)
+        return []
+
+
+def _build_cta_overlay(duration):
+    """A LIKE / SHARE / SUBSCRIBE prompt over the last few seconds.
+
+    The narration already ends with a spoken sign-off, but a viewer watching on
+    mute never hears it - and the end of a Short is the one moment where the
+    viewer has decided they liked it. Nothing on screen was asking them to act.
+    """
+    if not get_cfg("cta_overlay.enabled", True):
+        return []
+    text = str(get_cfg("cta_overlay.text", "LIKE  ·  SHARE  ·  SUBSCRIBE")).strip()
+    if not text:
+        return []
+
+    dur = float(get_cfg("cta_overlay.duration_seconds", 4.0))
+    dur = min(dur, max(1.0, duration - 1.0))
+    start = max(0.0, duration - dur)
+    fade = float(get_cfg("cta_overlay.fade_seconds", 0.4))
+    y_ratio = float(get_cfg("cta_overlay.position_y_ratio", 0.80))
+
+    clips = []
+    try:
+        # A dark band behind it, because this sits over unpredictable footage and
+        # a stroke alone is not always enough to stay legible.
+        band = _make_caption_backdrop(
+            int(W * 0.92), int(get_cfg("cta_overlay.fontsize", 62) * 2.1),
+            start, dur, int(H * y_ratio) - int(get_cfg("cta_overlay.fontsize", 62) * 0.55),
+        )
+        if band is not None:
+            clips.append(band)
+    except Exception as exc:
+        log.warning("CTA band failed (%s); text only.", exc)
+
+    tc = _make_text_clip(
+        text,
+        int(get_cfg("cta_overlay.fontsize", 62)),
+        get_cfg("cta_overlay.color", "#FFD86B"),
+        get_cfg("cta_overlay.stroke_color", "black"),
+        int(get_cfg("cta_overlay.stroke_width", 5)),
+        None,
+        int(W * 0.9),
+        duration=dur,
+    )
+    if tc is not None:
+        try:
+            tc = tc.set_start(start).set_position(("center", int(H * y_ratio)))
+            if fade > 0 and dur > fade * 2:
+                tc = tc.crossfadein(fade)
+            clips.append(tc)
+        except Exception as exc:
+            log.warning("Could not place CTA overlay (%s).", exc)
+
+    sub = str(get_cfg("cta_overlay.subtext", "")).strip()
+    if sub:
+        st = _make_text_clip(
+            sub, int(get_cfg("cta_overlay.fontsize", 62) * 0.62),
+            "#FFF6E0", "black", 4, None, int(W * 0.9), duration=dur,
+        )
+        if st is not None:
+            try:
+                st = st.set_start(start).set_position(
+                    ("center", int(H * y_ratio) + int(get_cfg("cta_overlay.fontsize", 62) * 1.25)))
+                if fade > 0 and dur > fade * 2:
+                    st = st.crossfadein(fade)
+                clips.append(st)
+            except Exception:
+                pass
+
+    if clips:
+        log.info("CTA overlay: %r for the last %.1fs.", text, dur)
+    return clips
+
+
 def _build_flash_clips(flashes, duration, start_after=0.0):
     """Flash a few very short phrases during the middle of the reel.
 
@@ -1313,6 +1389,11 @@ def compose_video(voice_path, text, keywords, hook_text=None, out_path=None,
 
     # 4) Hook overlays go on top.
     layers.extend(hook_overlays)
+
+    # Cinematic texture over everything, then the end-of-reel call to action on
+    # top of that.
+    layers.extend(_build_film_grain(duration))
+    layers.extend(_build_cta_overlay(duration))
 
     video = CompositeVideoClip(layers, size=(W, H)).set_duration(duration)
 

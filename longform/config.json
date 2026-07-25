@@ -15,7 +15,8 @@
   "video": {
     "width": 1920,
     "height": 1080,
-    "fps": 30,
+    "fps": 24,
+    "fps_note": "24 rather than 30. 18 was too low - camera motion visibly judders below 24 - but 24 is the cinema standard, looks right for this material, and is 20% fewer frames than 30 on an 11,700-frame render. That headroom matters now that shots pan and zoom instead of sitting static.",
     "resolution_note": "Raised from 1280x720@18fps. 18fps was acceptable for static images, but this pipeline now pans and zooms every scene, and camera motion at 18fps visibly judders - it reads as a cheap slideshow, which is the exact problem the motion engine exists to solve. 1080p also matters for watch time: YouTube's suggested-video surface favours HD, and long-form watch hours are this channel's only realistic route to monetisation.",
     "comment_duration": "5-8 minutes. NOTE: the composer never cuts the video to max_duration_seconds - it always matches the voiceover length - so length is actually controlled by story.target_words below. These bounds only decide when a warning is logged.",
     "target_duration_seconds": 390,
@@ -29,7 +30,8 @@
   "motion": {
     "comment": "Same anti-slideshow settings as the Shorts side. overscan is the travel room each still has for a pan; at 1.0 nothing can move. real_every cuts one REAL atmosphere shot in after this many generated frames.",
     "overscan": 1.22,
-    "zoom_amount": 0.08,
+    "overscan_note": "ai_images delivers frames AT this size pre-sharpened, so nothing is upscaled per-frame at render time.",
+    "zoom_amount": 0.12,
     "real_every": 3
   },
   "story": {
@@ -63,6 +65,11 @@
   "intro": {"enabled": true, "duration_seconds": 4.0, "fontsize": 58},
   "outro": {"enabled": true, "duration_seconds": 5.0, "fontsize": 42},
   "transitions": {"crossfade_seconds": 0.4},
+  "grain": {
+    "comment": "Faint moving grain over the whole katha - generated frames are unnaturally clean, and that cleanliness is what makes animated stills read as a slideshow. Lower than the Shorts value: a 6-8 minute video with visible grain becomes tiring.",
+    "enabled": true,
+    "opacity": 0.05
+  },
   "grade": {"enabled": true, "saturation": 1.14, "brightness": 6, "contrast": 0.1},
   "tts": {
     "comment": "Hindi katha-vachak voice. Madhur (male) leads; the pool is only 2 voices on purpose - a returning katha viewer builds trust with one narrator, and rotating six would destroy the only identity a faceless channel has.",
@@ -106,8 +113,12 @@
     "model": "flux",
     "style": "cinematic indian mythological art, dramatic warm lighting, rich saffron and deep blue palette, highly detailed, volumetric god rays, soft film grain, painterly, devotional, beautiful",
     "max_images": 14,
-    "width": 1920,
-    "height": 1080,
+    "width": 1792,
+    "height": 1024,
+    "dimension_note": "NOT the final frame size. 1920x1080 is 2.07 MP, past the ~1-1.8 MP these models handle without distorting anatomy - the Shorts side produced visibly stretched figures at that size. 1792x1024 is 1.83 MP at a 1.75 aspect (vs 1.778 target), so almost nothing is cropped. _postprocess() upscales to the overscan size with LANCZOS and an unsharp mask.",
+    "sharpen_percent": 130,
+    "contrast": 1.06,
+    "saturation": 1.08,
     "workers": 3,
     "motion": true,
     "time_budget_seconds": 300,
