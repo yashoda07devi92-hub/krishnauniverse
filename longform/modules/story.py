@@ -294,7 +294,7 @@ def _generate_with_gemini(lesson, topic):
                 log.warning("Model '%s' returned no usable text; trying next.", model_name)
                 continue
             story = Story(
-                title=str(data.get("title") or "A Moral Story").strip(),
+                title=str(data.get("title") or "श्रीकृष्ण की एक कथा").strip(),
                 text=str(data["text"]).strip(),
                 hook=str(data.get("hook") or "").strip(),
                 moral=str(data.get("moral") or "").strip(),
@@ -350,7 +350,7 @@ def load_fallback_stories():
             try:
                 stories.append(
                     Story(
-                        title=str(item.get("title", "A Moral Story")),
+                        title=str(item.get("title", "श्रीकृष्ण की एक कथा")),
                         text=str(item["text"]),
                         hook=str(item.get("hook", "")),
                         moral=str(item.get("moral", "")),

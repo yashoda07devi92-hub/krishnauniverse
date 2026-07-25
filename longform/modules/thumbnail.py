@@ -87,7 +87,7 @@ def generate_thumbnail(title, hook="", out_path=None):
         draw = ImageDraw.Draw(img)
 
         # Title (big, gold).
-        title = (title or "A Moral Story").strip()
+        title = (title or "श्रीकृष्ण की एक कथा").strip()
         font_big = _load_font(96)
         # No .upper(): Devanagari has no letter case. width lowered 16 -> 13
         # because Devanagari clusters are wider on screen than Latin
