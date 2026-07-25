@@ -99,7 +99,7 @@ class Check:
 # Shorts
 # --------------------------------------------------------------------------
 def sample_shorts(n):
-    from modules import gemini_script, seo
+    from modules import gemini_script, seo  # noqa: F401 (used by check_shorts)
 
     rows = []
     scripts = gemini_script.generate_scripts(n)
@@ -116,7 +116,7 @@ def sample_shorts(n):
 
 
 def check_shorts(rows, check):
-    from modules import seo
+    from modules import gemini_script, seo
 
     anchors = {a.lower() for pool in seo.SEARCH_ANCHORS.values() for a in pool}
 
@@ -196,6 +196,17 @@ def check_shorts(rows, check):
             f"{tag}: description has no call to action",
         )
         check.ok("#" in desc, f"{tag}: description carries no hashtags")
+
+        # LENGTH FLOOR. A Short under 25s is a hard requirement from the channel
+        # owner. The composer pads to video.min_duration_seconds, but padding is
+        # trailing silence, so the NARRATION itself has to clear the floor.
+        words = len(str(m.get("_text", "")).split())
+        secs = gemini_script.estimated_seconds(words)
+        floor = float(seo.get_cfg("video.min_duration_seconds", 25))
+        check.ok(secs >= floor,
+                 f"{tag}: narration only ~{secs:.1f}s ({words} words), under the "
+                 f"{floor:.0f}s floor - would publish with trailing silence",
+                 f"{words} words")
 
         titles.append(title)
         descs.append(desc)

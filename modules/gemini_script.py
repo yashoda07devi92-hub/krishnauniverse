@@ -171,7 +171,10 @@ _PROMPT_TEMPLATE = """आप "Krishna Universe" नाम के एक हि�
   सीख:  {lesson}
 
 नियम:
-- लंबाई लगभग {words} शब्द — बोलने पर करीब 30 सेकंड। इससे ज़्यादा बिल्कुल नहीं।
+- लंबाई लगभग {words} शब्द। कम से कम {min_words} शब्द ज़रूरी हैं और {max_words} से
+  ज़्यादा बिल्कुल नहीं। बोलने पर ये लगभग 26 से 36 सेकंड बनता है।
+- {min_words} शब्द से छोटी कथा अस्वीकार कर दी जाएगी — इसलिए कथा को पूरा कहें,
+  एक-दो दृश्य ज़रूर डालें, जल्दबाज़ी में मत निपटाएँ।
 - सरल, बोलचाल की हिंदी। कठिन संस्कृत शब्द नहीं। जैसे कोई दादी शांति से कथा
   सुना रही हो — भावुक, गर्म, अपनापन लिए।
 - पहला वाक्य एक छोटा curiosity hook हो (4 से 9 शब्द), जो स्क्रॉल रोक दे।
@@ -200,11 +203,30 @@ _PROMPT_TEMPLATE = """आप "Krishna Universe" नाम के एक हि�
 """
 
 
+# Hindi TTS at the configured -10% rate runs ~140 words/minute. Used to convert
+# the word budget into the runtime the channel actually has to honour.
+WORDS_PER_MINUTE = 140.0
+
+
+def _word_budget():
+    """(target, minimum, maximum) words for one reel."""
+    return (
+        int(get_cfg("gemini.target_words", 72)),
+        int(get_cfg("gemini.min_words", 62)),
+        int(get_cfg("gemini.max_words", 84)),
+    )
+
+
+def estimated_seconds(word_count):
+    return (word_count / WORDS_PER_MINUTE) * 60.0
+
+
 def _build_prompt(premise, lesson):
-    target_words = get_cfg("gemini.target_words", 68)
+    target_words, min_words, max_words = _word_budget()
     scenes = int(get_cfg("ai_images.max_images", 7))
     return _PROMPT_TEMPLATE.format(
         premise=premise, lesson=lesson, words=target_words,
+        min_words=min_words, max_words=max_words,
         cta=_pick_cta(), scenes=scenes,
     )
 
@@ -272,15 +294,20 @@ def _generate_with_gemini(premise, lesson):
     )
     ordered = [default_model] + [m for m in candidates if m != default_model]
 
-    prompt = _build_prompt(premise, lesson)
     temperature = get_cfg("gemini.temperature", 0.92)
+    # If every model comes back too short, the least-bad one is still better than
+    # dropping to the small bundled pool - the composer's clamp will pad it.
+    shortest_ok = None
 
     for model_name in ordered:
         try:
             log.info("Requesting Hindi script from Gemini model '%s'...", model_name)
             model = genai.GenerativeModel(model_name)
+            # Rebuilt per attempt so the CTA rotates and the length rules are
+            # restated to each model.
             resp = model.generate_content(
-                prompt, generation_config={"temperature": temperature}
+                _build_prompt(premise, lesson),
+                generation_config={"temperature": temperature},
             )
             data = _parse_model_json(getattr(resp, "text", None))
             if not data or not data.get("text"):
@@ -302,6 +329,34 @@ def _generate_with_gemini(premise, lesson):
             )
             if not _has_cta(script.text):
                 script.text = script.text.rstrip() + " " + _pick_cta()
+
+            # LENGTH FLOOR. A Short must not come out under 25s. The composer
+            # clamps the timeline to video.min_duration_seconds, so a short script
+            # is not published short - but the padding is trailing SILENCE, which
+            # reads as a mistake and hurts the loop. So a script that would run
+            # under the floor is rejected and the next model is asked instead.
+            target_words, min_words, max_words = _word_budget()
+            words = script.word_count
+            if words < min_words:
+                log.warning(
+                    "Model '%s' returned %d words (~%.1fs), under the %d-word floor "
+                    "(~%.1fs); trying next model.",
+                    model_name, words, estimated_seconds(words),
+                    min_words, estimated_seconds(min_words),
+                )
+                # Keep the LONGEST of the rejects, not the first one - if every
+                # model undershoots, the closest to the floor needs the least
+                # padding.
+                if shortest_ok is None or script.word_count > shortest_ok.word_count:
+                    shortest_ok = script
+                continue
+            if words > max_words:
+                log.warning(
+                    "Model '%s' returned %d words (~%.1fs), over the %d-word cap; "
+                    "trying next model.",
+                    model_name, words, estimated_seconds(words), max_words,
+                )
+                continue
             log.info(
                 "Gemini script ready via '%s' (%d words, %d scene prompt(s)).",
                 model_name, script.word_count, len(script.scene_prompts),
@@ -311,6 +366,14 @@ def _generate_with_gemini(premise, lesson):
             log.warning("Gemini model '%s' failed (%s); trying next.", model_name, exc)
             continue
 
+    if shortest_ok is not None:
+        log.warning(
+            "Every model came in under the word floor; using the longest of them "
+            "(%d words, ~%.1fs). The composer will pad to the %ss floor.",
+            shortest_ok.word_count, estimated_seconds(shortest_ok.word_count),
+            get_cfg("video.min_duration_seconds", 25),
+        )
+        return shortest_ok
     log.warning("All Gemini model candidates failed - using local quotes.json.")
     return None
 
