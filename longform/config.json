@@ -1,0 +1,133 @@
+{
+  "channel": {
+    "comment": "This pipeline uploads with the SAME YT_TOKEN_JSON as the Shorts pipeline, i.e. onto the SAME YouTube channel. The name must therefore match the Shorts side exactly - descriptions that welcome viewers to a brand the channel does not carry confuse both the audience and YouTube's topic model. If these kathas ever move to their own channel, change this and give that channel its own token.",
+    "name": "Krishna Universe",
+    "cta": "राधे राधे। ऐसी ही कथाओं के लिए चैनल को Subscribe कीजिए।",
+    "cta_pool_note": "The 30 rotating Hindi sign-offs live in modules/pools.py (CTA_CANDIDATES) and are drawn without replacement via modules/history.py. Adding a 'cta_pool' array here would OVERRIDE that larger pool, so leave it out."
+  },
+  "seo": {
+    "comment": "Consumed by modules/seo.py. Chapters need >=3 entries, must start at 0:00, and each must be >=10s or YouTube silently ignores the whole block.",
+    "hashtag_count": 12,
+    "hashtag_count_note": "Raised 8 -> 12 to use more of the useful budget, but deliberately kept under 15: YouTube ignores ALL hashtags on a video carrying more than 15, so going higher would leave the video with effectively none.",
+    "chapter_count": 6,
+    "channel_url": "https://www.youtube.com/@KrishnaUniverse"
+  },
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "resolution_note": "Raised from 1280x720@18fps. 18fps was acceptable for static images, but this pipeline now pans and zooms every scene, and camera motion at 18fps visibly judders - it reads as a cheap slideshow, which is the exact problem the motion engine exists to solve. 1080p also matters for watch time: YouTube's suggested-video surface favours HD, and long-form watch hours are this channel's only realistic route to monetisation.",
+    "comment_duration": "5-8 minutes. NOTE: the composer never cuts the video to max_duration_seconds - it always matches the voiceover length - so length is actually controlled by story.target_words below. These bounds only decide when a warning is logged.",
+    "target_duration_seconds": 390,
+    "min_duration_seconds": 300,
+    "max_duration_seconds": 480,
+    "scene_cut_seconds": 4.0,
+    "clip_cut_seconds": 3.0,
+    "preset": "veryfast",
+    "crf": 23
+  },
+  "motion": {
+    "comment": "Same anti-slideshow settings as the Shorts side. overscan is the travel room each still has for a pan; at 1.0 nothing can move. real_every cuts one REAL atmosphere shot in after this many generated frames.",
+    "overscan": 1.22,
+    "zoom_amount": 0.08,
+    "real_every": 3
+  },
+  "story": {
+    "comment": "THIS is what controls video length. The Hindi narrator voice runs ~140 words/minute at the configured rate, so 700-1150 words = 5-8 minutes. A story over max_words is rejected and the next model is asked; if all of them overshoot, the shortest is trimmed at a sentence boundary with the moral re-appended.",
+    "length_note": "Longer than the 3-5 min the US pipeline used. That target was for a bedtime story; here the goal is watch HOURS, and watch hours come from duration. At 40% retention a 6.5-minute katha yields ~2.6 minutes per view, so ~92k views reaches the 4,000-hour threshold - versus 10 MILLION views needed on the Shorts route.",
+    "target_words": 900,
+    "min_words": 700,
+    "max_words": 1150
+  },
+  "palette": {
+    "comment": "Deep indigo night with warm saffron light - used only when no visuals are available at all.",
+    "gradient_top": [46, 30, 74],
+    "gradient_bottom": [14, 10, 28],
+    "solid_fallback": [30, 20, 50]
+  },
+  "captions": {
+    "comment": "ON for long-form, unlike the Shorts side. The reason they were switched off there does not apply here: a 16:9 frame has real space at the bottom, the subject is not filling the screen, and long-form viewers often watch with sound low. NOTE: the 'font' key is ignored - all text renders through modules/textrender.py, which resolves a Devanagari font itself. fontsize reduced 42 -> 38 because Devanagari matras and conjuncts occupy more vertical space than Latin at the same point size.",
+    "enabled": true,
+    "fontsize": 38,
+    "color": "#FFF6E0",
+    "stroke_color": "black",
+    "stroke_width": 3,
+    "font": "ignored-see-textrender",
+    "words_per_group": 7,
+    "words_per_group_note": "Lowered 9 -> 7. Hindi words are longer on screen than English ones, and 9 Devanagari words overflowed the frame width.",
+    "position_y_ratio": 0.82,
+    "bg_opacity": 0.4,
+    "bg_color": "#000000",
+    "rounded": true
+  },
+  "intro": {"enabled": true, "duration_seconds": 4.0, "fontsize": 58},
+  "outro": {"enabled": true, "duration_seconds": 5.0, "fontsize": 42},
+  "transitions": {"crossfade_seconds": 0.4},
+  "grade": {"enabled": true, "saturation": 1.14, "brightness": 6, "contrast": 0.1},
+  "tts": {
+    "comment": "Hindi katha-vachak voice. Madhur (male) leads; the pool is only 2 voices on purpose - a returning katha viewer builds trust with one narrator, and rotating six would destroy the only identity a faceless channel has.",
+    "voice": "hi-IN-MadhurNeural",
+    "voice_pool": ["hi-IN-MadhurNeural", "hi-IN-SwaraNeural"],
+    "rate": "-10%",
+    "pitch": "+0Hz",
+    "chunk_chars": 600,
+    "fallback_lang": "hi",
+    "fallback_tld": "co.in"
+  },
+  "gemini": {
+    "model": "gemini-2.0-flash",
+    "model_candidates": ["gemini-2.0-flash", "gemini-flash-latest", "gemini-2.5-flash"],
+    "temperature": 0.92
+  },
+  "pexels": {
+    "comment": "ATMOSPHERE ONLY - real things that genuinely exist as stock footage. Krishna is never searched for here; the katha is carried by ai_images. The composer cuts these real moving shots between generated frames.",
+    "orientation": "landscape",
+    "min_clips": 14,
+    "per_query": 20,
+    "default_keywords": [
+      "river water flowing sunlight",
+      "peacock dancing slow motion",
+      "cows grazing green field india",
+      "oil lamp diya flame dark",
+      "indian temple architecture",
+      "forest sunlight rays trees",
+      "monsoon rain on leaves",
+      "golden sunset over river",
+      "banyan tree ancient roots",
+      "morning mist over water",
+      "marigold flowers garland",
+      "night sky stars time lapse"
+    ]
+  },
+  "music": {"enabled": true, "volume": 0.1, "synth_fallback": true, "synth_volume": 0.07},
+  "ai_images": {
+    "comment": "The visual layer. model raised from 'turbo' to 'flux' and workers from 1 to 3: turbo/workers=1 was a workaround for rate limiting WITHOUT an API key, and on this channel the images ARE the video, so a rate-limited run produces a katha with no Krishna in it. Set POLLINATIONS_TOKEN (free) and this is safe. motion turned ON - it was false, which is literally what made the long-form a slideshow.",
+    "enabled": true,
+    "model": "flux",
+    "style": "cinematic indian mythological art, dramatic warm lighting, rich saffron and deep blue palette, highly detailed, volumetric god rays, soft film grain, painterly, devotional, beautiful",
+    "max_images": 14,
+    "width": 1920,
+    "height": 1080,
+    "workers": 3,
+    "motion": true,
+    "time_budget_seconds": 300,
+    "min_required": 1
+  },
+  "youtube": {
+    "category_id": "24",
+    "category_note": "24 = Entertainment. Devotional storytelling sits here rather than 27 (Education); Entertainment is where this niche's suggested-video pool actually is.",
+    "privacy_status": "public",
+    "default_language": "hi",
+    "default_audio_language": "hi",
+    "language_note": "Both fields matter. Left unset, YouTube guesses the language from the title, and a Hindi katha mislabelled as English is served to the wrong audience and loses auto-translation.",
+    "made_for_kids": false,
+    "made_for_kids_note": "Owner confirmed NOT made for kids. Marking it so would disable comments entirely and switch off personalised ads, roughly halving RPM.",
+    "hashtags_note": "FALLBACK ONLY. Per-episode rotating hashtags come from modules/seo.py.",
+    "hashtags": "#कृष्णकथा #श्रीकृष्ण #भक्ति",
+    "default_tags_note": "FALLBACK ONLY. modules/seo.py builds the per-episode tag set within YouTube's 500-char budget.",
+    "default_tags": [
+      "कृष्ण कथा", "krishna story in hindi", "श्रीकृष्ण कथा", "भक्ति कथा",
+      "गीता उपदेश", "महाभारत कथा", "कृष्ण लीला", "hindi moral story"
+    ]
+  }
+}

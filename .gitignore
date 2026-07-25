@@ -1,0 +1,37 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---- Secrets / credentials ----
+.env
+*.env
+client_secret*.json
+token*.json
+yt_token.json
+yt_token_manage.json
+yt_client_secret.json
+*.session
+*.session-journal
+ig_session.json
+
+# ---- Generated output & downloaded media ----
+output/
+manifest.json
+assets/clips/
+assets/images/
+assets/cache/
+# keep the music folder placeholder but ignore actual tracks
+assets/music/*
+!assets/music/.gitkeep
+!assets/music/*.mp3
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

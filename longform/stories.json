@@ -1,0 +1,102 @@
+{
+  "_comment": "FALLBACK ONLY. Used when GEMINI_API_KEY is missing or every Gemini model fails. These replace the English moral stories (The Boy Who Cried Wolf, The Ant and the Grasshopper...) that were carried over from the pipeline this was ported from - on a Hindi Krishna channel those would have published an English story about a shepherd boy, in an English voice, under a Hindi title. Keep this list SHORT on purpose: if the pipeline is running on fallbacks for weeks the same katha WILL repeat, and the fix is to restore the Gemini key, not to grow this file.",
+  "_length_note": "Each 'text' is ~730-760 words, inside the configured 700-1150 band, which is ~5-5.5 minutes at the Hindi TTS rate of -10%.",
+  "_scenes_note": "scenes and main_character are in ENGLISH on purpose - the image model produces garbled output from Devanagari prompts. Everything spoken is Hindi.",
+  "stories": [
+    {
+      "title": "गोवर्धन पर्वत और इंद्र का अहंकार",
+      "hook": "इंद्र को गुस्सा इस बात पर आया कि एक छोटे से गाँव ने उनकी पूजा छोड़ दी।",
+      "moral": "इस कथा की सीख यही है कि जो तुम्हें रोज़ पालता है, उसका आदर करो — दिखावे का नहीं।",
+      "main_character": "young lord krishna, around 10 years old, blue-tinted skin, peacock feather in his dark curly hair, yellow dhoti, garland of forest flowers, bare feet",
+      "keywords": [
+        "monsoon rain on leaves",
+        "cows grazing green field india",
+        "rain clouds dark sky",
+        "river water flowing sunlight",
+        "village mud houses india",
+        "forest sunlight rays trees"
+      ],
+      "text": "इंद्र को गुस्सा इस बात पर आया कि एक छोटे से गाँव ने उनकी पूजा छोड़ दी। और उस गाँव में एक ग्यारह साल का बालक था, जिसने ये सब शुरू किया था। बात बरसात के दिनों की है। हर साल व्रज के लोग इंद्र की पूजा करते थे। बड़ा आयोजन होता, घी चढ़ाया जाता, मंत्र पढ़े जाते। मान्यता थी कि इंद्र प्रसन्न होंगे तो बारिश होगी, और बारिश होगी तो घास उगेगी, और घास उगेगी तो गायें दूध देंगी। उस साल भी तैयारी चल रही थी। नंद बाबा आँगन में बैठे सामान गिनवा रहे थे। तभी कान्हा आकर पास बैठ गए और एक सवाल पूछा — बाबा, हम पूजा किसकी कर रहे हैं? नंद बाबा ने कहा — इंद्रदेव की, वो बारिश देते हैं। कान्हा ने फिर पूछा — और घास किस पर उगती है? नंद बाबा रुक गए। कान्हा ने कहा — घास गोवर्धन पर उगती है। हमारी गायें गोवर्धन पर चरती हैं। हमें लकड़ी, जड़ी-बूटी, पानी के झरने, सब गोवर्धन से मिलते हैं। पूरे साल जो हमें पालता है, वो गोवर्धन है। और हम पूजा किसी और की कर रहे हैं। सभा में सन्नाटा छा गया। बात सीधी थी, पर किसी ने पहले सोची नहीं थी। नंद बाबा ने पूछा — तो तुम क्या कहते हो? कान्हा ने कहा — इस बार गोवर्धन की पूजा करें। जो रोज़ हमारे साथ खड़ा है, उसका आदर करें। उस साल व्रज ने पहली बार गोवर्धन पूजा की। पूरा गाँव पर्वत की तलहटी में इकट्ठा हुआ। हर घर से भोजन आया — छप्पन तरह के पकवान, खीर, माखन, दही। बच्चों ने फूल चढ़ाए। गायों को सजाया गया। लोगों ने पर्वत की परिक्रमा की और उसे धन्यवाद कहा। लेकिन ऊपर, स्वर्ग में, इंद्र ये सब देख रहे थे। और उन्हें ये सहन नहीं हुआ। एक साधारण पर्वत? मिट्टी और पत्थर का ढेर? उसकी पूजा हो रही है, और देवराज इंद्र को छोड़ दिया गया? उन्होंने सोचा — ये गाँव भूल गया है कि मैं कौन हूँ। मैं इसे याद दिलाऊँगा। और उन्होंने बादलों को आदेश दिया। आकाश काला पड़ गया। दिन में अंधेरा हो गया। और फिर बारिश शुरू हुई — ऐसी बारिश जो व्रज ने कभी नहीं देखी थी। पानी की चादरें गिर रही थीं। बिजली कड़क रही थी। ओले पड़ने लगे। यमुना का पानी चढ़ने लगा। झोपड़ियों की छतें उड़ गईं। खेत डूब गए। गायें डर के मारे रँभा रही थीं, बच्चे रो रहे थे। लोग भीगते हुए कान्हा के पास दौड़े और बोले — कान्हा, हमने तुम्हारी बात मानी, और अब देखो हमारा क्या हाल है। अब हमें कौन बचाएगा? कान्हा मुस्कुराए। उन्होंने कहा — डरिए मत। आप सब मेरे पीछे आइए। और वो गोवर्धन की तरफ चल दिए। पर्वत के पास पहुँचकर कान्हा ने अपना एक हाथ बढ़ाया, और उस पूरे पर्वत को उठा लिया — जैसे कोई छाता उठाता है। और बोले — अंदर आ जाइए। सब लोग, सब गायें, सब बछड़े। पूरा व्रज उस पर्वत के नीचे आ गया। ऊपर मूसलाधार बारिश हो रही थी, और नीचे एक बूँद नहीं गिर रही थी। बच्चे खेल रहे थे। गायें शांत खड़ी थीं। किसी ने बाद में कहा कि उन सात दिनों में किसी को भूख भी नहीं लगी, प्यास भी नहीं लगी, थकान भी नहीं हुई। और कान्हा? कान्हा सात दिन तक वैसे ही खड़े रहे। एक हाथ पर पूरा पर्वत, और चेहरे पर वही मुस्कान। एक बार भी उन्होंने ये नहीं कहा कि देखो मैं क्या कर रहा हूँ। सातवें दिन इंद्र थक गए। बादल खाली हो गए। बारिश रुक गई। और तब इंद्र को समझ आया कि वो किससे लड़ रहे थे। वो नीचे आए, कान्हा के सामने सिर झुकाया, और क्षमा माँगी। उन्होंने कहा — मैं अपने पद के अहंकार में भूल गया था कि पद किसी को बड़ा नहीं बनाता। कान्हा ने उन्हें उठाया और कहा — इंद्रदेव, आपका काम बड़ा है। पर जो नीचे रहकर चुपचाप सेवा करता है, उसका आदर भी होना चाहिए। आपको भुलाया नहीं गया, बस गोवर्धन को याद किया गया। कान्हा ने पर्वत को धीरे से नीचे रखा। लोग बाहर आए, और उन्होंने देखा कि उनका गाँव सुरक्षित है। इस कथा की सीख यही है कि जो तुम्हें रोज़ पालता है, उसका आदर करो — दिखावे का नहीं। जो सामने चमकता है उसकी पूजा करना आसान है, पर जो चुपचाप रोज़ तुम्हारा साथ देता है — घर के लोग हों, कोई पुराना दोस्त हो, या वो पर्वत जिस पर तुम्हारी गायें चरती हैं — असली धर्म उसे याद रखने में है। राधे राधे। ऐसी ही कथाओं के लिए चैनल को Subscribe कीजिए।",
+      "scenes": [
+        "an ancient indian village at dawn preparing for a festival, clay pots, marigold flowers, women carrying offerings, warm golden light",
+        "an elderly village headman with a white turban sitting in a courtyard counting offerings, morning sun",
+        "young krishna with a peacock feather in his hair sitting beside the headman and asking a question, gentle light",
+        "a great green mountain rising behind a village, cows grazing on its slopes, forest streams, sunlit",
+        "the whole village gathered at the foot of the mountain with mountains of food offerings, children placing flowers, festive",
+        "indra the king of gods standing on a storm cloud looking down in anger, lightning around him, dark sky",
+        "the sky turning black over a village in daytime, terrified villagers looking up, dramatic",
+        "torrential rain and hailstones battering mud houses, roofs blowing off, cows lowing in fear",
+        "villagers running through heavy rain toward young krishna, desperate, dramatic storm light",
+        "young krishna raising one hand and lifting an enormous mountain like an umbrella, cinematic low angle, rain streaming off the edges",
+        "the entire village and their cows sheltering dry beneath the lifted mountain, children playing, warm lamp light from below",
+        "young krishna standing calm and smiling with a mountain balanced on one finger, seven days of rain around him",
+        "indra descending from the clouds and bowing before young krishna with folded hands, humbled, soft light breaking through",
+        "the mountain gently set back down, villagers emerging into clear sunlight, a rainbow, wet earth, peaceful"
+      ]
+    },
+    {
+      "title": "सुदामा की तीन मुट्ठी चावल",
+      "hook": "सुदामा द्वारका के दरवाज़े तक पहुँच गए, पर अंदर जाने की हिम्मत नहीं हुई।",
+      "moral": "इस कथा की सीख यही है कि प्रेम से दी गई सबसे छोटी चीज़ सबसे बड़ी होती है।",
+      "main_character": "an elderly poor brahmin man, thin frame, worn white dhoti, unkempt grey beard, bare feet, carrying a small tattered cloth bundle",
+      "keywords": [
+        "indian temple architecture",
+        "clay pot water village",
+        "village mud houses india",
+        "golden sunset over river",
+        "brass utensils temple",
+        "footprints in wet sand"
+      ],
+      "text": "सुदामा द्वारका के दरवाज़े तक पहुँच गए, पर अंदर जाने की हिम्मत नहीं हुई। और इसकी वजह उनकी गरीबी नहीं थी। वजह कुछ और थी। सुदामा और कान्हा बचपन के दोस्त थे। दोनों संदीपनी मुनि के आश्रम में साथ पढ़े थे। साथ लकड़ी काटी थी, साथ जंगल में भटके थे, साथ एक बार पूरी रात बारिश में एक पेड़ के नीचे बैठे रहे थे। सुदामा को वो रात आज भी याद थी। कान्हा ने अपनी चादर उस रात सुदामा को दे दी थी और खुद भीगते रहे थे। फिर पढ़ाई पूरी हुई और रास्ते अलग हो गए। कान्हा द्वारका के राजा बन गए। और सुदामा? सुदामा एक छोटे से गाँव में रह गए, पूजा-पाठ करते, जो मिल जाता उसमें गुज़ारा करते। साल बीतते गए। घर में बच्चे हुए, और गरीबी बढ़ती गई। कई-कई दिन चूल्हा नहीं जलता था। बच्चे भूख से रोते और सो जाते। एक दिन सुदामा की पत्नी सुशीला ने कहा — सुनिए, आप कहते हैं कि द्वारकाधीश आपके बचपन के मित्र हैं। एक बार उनके पास चले जाइए। सुदामा ने सिर हिला दिया। बोले — नहीं। दोस्ती माँगने के लिए नहीं होती। जिस दिन मैं हाथ फैलाकर उनके सामने खड़ा हो जाऊँगा, उस दिन वो दोस्ती नहीं रहेगी। सुशीला चुप हो गईं। पर उस रात बच्चे फिर भूखे सो गए। अगली सुबह सुशीला ने कहा — कुछ माँगना नहीं। बस मिलने चले जाइए। इतने साल हो गए, मित्र से मिलना भी गलत है क्या? इस बात का सुदामा के पास कोई जवाब नहीं था। तो वो तैयार हो गए। पर एक दिक्कत थी। किसी के घर खाली हाथ नहीं जाते। और घर में देने लायक कुछ था ही नहीं। सुशीला पड़ोस से माँगकर थोड़े चावल ले आईं — बस तीन मुट्ठी। उन्होंने वो चावल एक पुराने फटे कपड़े में बाँध दिए। सुदामा उस पोटली को देखकर हँसे। बोले — एक राजा को ये दूँगा? पर उन्होंने पोटली अपनी बगल में दबा ली और चल दिए। कई दिन पैदल चलने के बाद वो द्वारका पहुँचे। सोने के दरवाज़े, हीरे-जवाहरात जड़े खंभे, चौड़ी सड़कें, रथ, सैनिक। सुदामा वहीं खड़े रह गए। उन्होंने अपने पैर देखे — नंगे, धूल से भरे। अपने कपड़े देखे — फटे हुए। और अपनी पोटली देखी। और तब जो शर्म आई, वो गरीबी की नहीं थी। वो इस बात की थी कि मैं इनके पास कुछ लेने आया हूँ। द्वारपाल ने पूछा — कौन हैं आप? सुदामा ने धीरे से कहा — मैं सुदामा हूँ। द्वारकाधीश का पुराना मित्र। द्वारपाल अंदर गया, और उसने कान्हा से कहा — कोई सुदामा नाम के ब्राह्मण आए हैं, कहते हैं आपके मित्र हैं। कान्हा उस समय सभा में बैठे थे। नाम सुनते ही वो उठकर दौड़े। सिंहासन छोड़ा, जूते नहीं पहने, दौड़ते हुए दरवाज़े तक गए, और सुदामा को गले से लगा लिया। सारी सभा हैरान थी। द्वारकाधीश एक फटे कपड़े वाले ब्राह्मण के गले लग रहे हैं। कान्हा सुदामा को अंदर ले गए, अपने आसन पर बिठाया। रुक्मिणी ने आकर उनके पैर धोए। कान्हा बचपन की बातें करने लगे — याद है वो बारिश की रात? याद है गुरु माता की डाँट? सुदामा हँस रहे थे और आँखों में पानी था। और वो पोटली? सुदामा उसे लगातार अपने पीछे छिपा रहे थे। कान्हा की नज़र उस पर पड़ गई। उन्होंने पूछा — मित्र, भाभी ने मेरे लिए कुछ भेजा है क्या? सुदामा ने कहा — नहीं, कुछ नहीं। कान्हा हँसे, और उन्होंने वो पोटली सुदामा के हाथ से खींच ली। खोली। और उसमें से एक मुट्ठी चावल निकालकर खा लिए। दूसरी मुट्ठी खाई। जैसे तीसरी मुट्ठी उठाने लगे, रुक्मिणी ने उनका हाथ पकड़ लिया। सुदामा कुछ समझे नहीं। कान्हा ने वो चावल ऐसे खाए जैसे उन्हें दुनिया का सबसे स्वादिष्ट भोजन मिला हो। सुदामा कुछ दिन द्वारका रहे। और पूरे समय उन्होंने कान्हा से कुछ नहीं माँगा। एक बार भी नहीं। और कान्हा ने भी कुछ नहीं दिया। न धन, न अनाज, न वचन। सुदामा जब चलने लगे, तो थोड़ा मन में आया — मैं खाली हाथ जा रहा हूँ। पर फिर सोचा — मैं तो मिलने आया था। मिल लिया। रास्ते भर वो सोचते रहे कि घर पहुँचकर सुशीला से क्या कहूँगा। गाँव पहुँचे। और वहाँ अपनी झोपड़ी नहीं मिली। उसकी जगह एक सुंदर घर खड़ा था। बच्चे नए कपड़ों में खेल रहे थे। सुशीला दरवाज़े पर खड़ी मुस्कुरा रही थीं। सुदामा वहीं रुक गए, और उन्हें वो तीसरी मुट्ठी याद आई जो रुक्मिणी ने रोक दी थी। इस कथा की सीख यही है कि प्रेम से दी गई सबसे छोटी चीज़ सबसे बड़ी होती है। और सच्चा मित्र वो है जो तुम्हें माँगने ही न दे। जय श्री कृष्ण। अगली कथा के लिए जुड़े रहिए।",
+      "scenes": [
+        "two young boys in simple ashram clothes carrying firewood through a forest, warm evening light",
+        "two boys sheltering under a tree in heavy rain at night, one wrapping his shawl around the other",
+        "a poor mud hut in a small indian village at dusk, no smoke from the chimney, quiet and bare",
+        "an elderly thin brahmin sitting with his wife by a cold clay stove, hungry children asleep nearby, dim lamp light",
+        "a woman tying a few handfuls of rice into an old torn cloth, careful hands, morning light",
+        "an elderly barefoot brahmin walking a long dusty road with a small bundle, wide landscape, sunrise",
+        "the magnificent golden gates and jewelled pillars of the city of dwarka by the sea, majestic",
+        "a poor barefoot old man standing hesitant before grand palace gates, looking down at his dusty feet",
+        "a richly dressed king leaping up from his throne and running barefoot, courtiers astonished",
+        "the king of dwarka embracing a ragged old brahmin at the gates, warm emotional light",
+        "a queen in royal silks washing the feet of a poor old man, humble and reverent, golden lamps",
+        "krishna eating a handful of plain rice from a torn cloth bundle with delight, intimate warm light",
+        "a queen gently catching krishna's wrist as he reaches for a third handful, soft candlelight",
+        "an old man walking home along a road at sunset, long shadows, thoughtful",
+        "a beautiful new house standing where a mud hut used to be, well dressed children playing, wife smiling at the door, golden evening light"
+      ]
+    },
+    {
+      "title": "कालिया नाग और यमुना का ज़हर",
+      "hook": "यमुना का पानी काला हो गया था, और जो गाय उसे पीती थी वो लौटकर नहीं आती थी।",
+      "moral": "इस कथा की सीख यही है कि अहंकार जितना ऊँचा उठे, गिरने के लिए उतनी ही जगह बनाता है।",
+      "main_character": "young lord krishna, around 10 years old, blue-tinted skin, peacock feather in his dark curly hair, yellow dhoti, bare feet, calm fearless expression",
+      "keywords": [
+        "river water flowing sunlight",
+        "calm river at sunrise",
+        "cows grazing green field india",
+        "lotus flower in pond",
+        "forest sunlight rays trees",
+        "morning mist over water"
+      ],
+      "text": "यमुना का पानी काला हो गया था, और जो गाय उसे पीती थी वो लौटकर नहीं आती थी। और इसकी वजह एक ऐसा जीव था जिसने कभी किसी से कुछ माँगा नहीं था — उसने बस कब्ज़ा कर लिया था। यमुना के एक हिस्से में एक गहरा कुंड था। उस कुंड में कालिया नाम का नाग रहता था। वो पहले कहीं और रहता था, फिर वहाँ से भागकर यमुना में आ बसा। और आते ही उसने उस कुंड को अपना बना लिया। उसका ज़हर इतना तेज़ था कि पानी काला पड़ गया। कुंड के ऊपर से जो पक्षी उड़ता, वो बीच में ही गिर जाता। किनारे के पेड़ सूख गए। घास जल गई। और सबसे बुरी बात — व्रज की गायें प्यास में वहीं पानी पी लेती थीं, और फिर उठती नहीं थीं। लोगों ने रास्ता बदल दिया। बच्चों को मना कर दिया गया कि उस तरफ मत जाना। एक पूरा गाँव डर के साथ जीने लगा। और कालिया? कालिया खुश था। उसे लगता था कि यही ताक़त है। कोई मेरे पास आता ही नहीं, इसका मतलब मैं सबसे बड़ा हूँ। एक दिन कान्हा और उनके सखा गायें चरा रहे थे। दोपहर की गर्मी थी। कुछ गायें प्यास से भटकते हुए उसी कुंड की तरफ चली गईं। सखाओं ने चिल्लाकर रोका, पर देर हो गई। पानी पीते ही गायें गिरने लगीं। बच्चे रोने लगे। किसी को समझ नहीं आ रहा था क्या करें। कान्हा कुंड के किनारे खड़े होकर उस काले पानी को देख रहे थे। उन्होंने कुछ कहा नहीं। बस देखते रहे। फिर वो किनारे के एक कदम्ब के पेड़ पर चढ़ गए। सखे चिल्लाए — कान्हा नहीं! वहाँ मत जाओ! पर कान्हा ने अपना दुपट्टा कमर में कसा, और उस काले कुंड में छलाँग लगा दी। पानी ज़ोर से उछला। और फिर सन्नाटा। किनारे खड़े बच्चे रोने लगे। कोई गाँव की तरफ दौड़ा। थोड़ी देर में पूरा व्रज वहाँ इकट्ठा हो गया — यशोदा, नंद बाबा, गोपियाँ, सब। यशोदा किनारे पर बेहोश होने लगीं। पानी के नीचे कान्हा ने कुंड के तल पर पहुँचकर पानी को हिलाना शुरू किया। कालिया गुस्से में जाग गया। उसने देखा कि एक छोटा बालक उसके घर में घुस आया है। उसने कान्हा को अपने शरीर में लपेट लिया, कस के जकड़ लिया, और अपने सैकड़ों फनों से ज़हर उगलने लगा। और यहाँ एक बात हुई। कान्हा ने अपना शरीर फैलाना शुरू किया। धीरे-धीरे, लगातार। कालिया की पकड़ ढीली पड़ने लगी। उसे छोड़ना पड़ा। वो पीछे हटा, हाँफता हुआ, और पहली बार उसे कुछ महसूस हुआ जो उसने कभी महसूस नहीं किया था — डर। कान्हा पानी से बाहर आए, कालिया के फनों पर चढ़ गए, और नाचने लगे। हर बार जब कालिया कोई फन उठाकर वार करने की कोशिश करता, कान्हा उसी फन पर पैर रख देते। एक-एक फन झुकता गया। किनारे खड़े लोग हैरान थे। कोई तालियाँ बजा रहा था, कोई रो रहा था। कालिया का शरीर टूटने लगा, मुँह से खून आने लगा। और तब उसकी पत्नियाँ, नाग पत्नियाँ, पानी से बाहर आईं। उन्होंने कान्हा के सामने हाथ जोड़े और कहा — प्रभु, हमें पता है इसने गलत किया। इसने अपनी ताक़त को सबसे बड़ा समझा। पर अब ये टूट गया है। इसे जीवन दे दीजिए। कान्हा रुक गए। उन्होंने कालिया को देखा — वही कालिया जो कल तक सबसे बड़ा था, आज बेदम पड़ा था। कान्हा नीचे उतरे और बोले — कालिया, तुम्हारी ताक़त बुरी नहीं थी। बुरा ये था कि तुमने उसे सिर्फ़ डराने के लिए इस्तेमाल किया। अब तुम ये जगह छोड़ दो। समुद्र में जाओ। वहाँ तुम्हें कोई नहीं छेड़ेगा, और तुम भी किसी का पानी ज़हरीला नहीं करोगे। कालिया ने सिर झुकाया और चला गया। और जैसे वो गया, यमुना का पानी साफ़ होने लगा। पहले धुँधला, फिर हल्का, और फिर बिल्कुल नीला। किनारे की घास लौट आई। पक्षी फिर उड़ने लगे। गायें आकर बिना डर के पानी पीने लगीं। कहते हैं उस दिन के बाद व्रज के बच्चे उस कुंड में तैरते थे, और वहाँ कमल खिलने लगे थे। इस कथा की सीख यही है कि अहंकार जितना ऊँचा उठे, गिरने के लिए उतनी ही जगह बनाता है। कालिया के सौ फन थे, और हर फन एक जगह थी जहाँ पैर रखा जा सकता था। और दूसरी सीख ये भी है कि जो सच्चे मन से क्षमा माँग ले, उसे दंड नहीं — दिशा मिलती है। हरे कृष्ण। रोज़ एक नई कथा के लिए Subscribe कर लीजिए।",
+      "scenes": [
+        "a dark poisoned stretch of river with black still water, dead trees on the bank, ominous atmosphere",
+        "a bird falling mid flight over black water, withered grass on the shore, eerie light",
+        "villagers and cows keeping their distance from a blackened riverbank, fearful, dusty afternoon",
+        "an enormous many hooded serpent coiled asleep at the bottom of a dark pool, menacing",
+        "young krishna and village boys herding cows on a hot afternoon, dust and golden light",
+        "cows collapsing at the edge of black water while boys shout in alarm, dramatic",
+        "young krishna standing silently at the edge of the black pool, looking down, calm and resolute",
+        "young krishna climbing a kadamba tree on a riverbank, boys below shouting up at him",
+        "young krishna diving into deep black water, bubbles and shafts of dim light, dramatic underwater view",
+        "the whole village gathered weeping on a riverbank, an anxious mother held up by other women",
+        "a giant serpent coiling tightly around a small boy underwater, terrifying scale",
+        "young krishna dancing gracefully on the hoods of a giant serpent, divine glow, cinematic wide shot",
+        "serpent wives rising from the water with folded hands pleading before young krishna, reverent light",
+        "an exhausted serpent bowing its head low before a small radiant boy, subdued",
+        "a clear blue river with lotus flowers, children swimming, cows drinking peacefully, golden morning light"
+      ]
+    }
+  ]
+}

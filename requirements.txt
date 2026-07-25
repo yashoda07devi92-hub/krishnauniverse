@@ -1,0 +1,37 @@
+# ============================================================================
+# SweetSoul Stories - Python dependencies
+# FREE + open-source tools only. Pinned for reproducible CI builds.
+# ============================================================================
+
+# --- Video / image processing ---
+moviepy==1.0.3
+# Pillow MUST stay at 9.5.0: moviepy 1.0.3 calls Image.ANTIALIAS which was
+# removed in Pillow>=10. Do NOT bump this without also fixing the shim.
+Pillow==9.5.0
+numpy==1.26.4
+imageio==2.34.2
+imageio-ffmpeg==0.4.9
+
+# --- Text-to-speech (edge-tts primary, gTTS fallback) ---
+edge-tts==7.0.0
+gTTS==2.5.4
+
+# --- AI script generation ---
+google-generativeai==0.8.3
+
+# --- HTTP / utilities ---
+requests==2.32.3
+python-dotenv==1.0.1
+
+# --- YouTube upload (OAuth2) ---
+google-api-python-client==2.137.0
+google-auth==2.32.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+
+# --- Instagram (OPTIONAL, OFF by default) ---
+instagrapi==2.1.2
+
+# NOTE: openai-whisper is intentionally NOT included. Its wheel fails to build
+# on modern pip ("No module named 'pkg_resources'"). Captions use a
+# timing-based fallback instead (see modules/subtitles.py).
