@@ -19,7 +19,7 @@ Usage examples
   python generate.py --days 1 --per-day 3
 
   # Generate around a specific topic idea:
-  python generate.py --topic "rescue kitten finds a forever home"
+  python generate.py --topic "कालिया नाग का अहंकार"
 
 The total number of reels produced is days * per_day (optionally capped by
 --limit). Heavy media libraries are imported lazily inside the modules so that
@@ -84,7 +84,7 @@ def _build_seo(script):
     """Build the full YouTube metadata bundle for this reel.
 
     Done HERE (at generate time) rather than at upload time on purpose: the
-    uploader used to bolt a fixed "| Cute & Wholesome #shorts #cute" suffix onto
+    uploader used to bolt one fixed English suffix onto
     every title and re-append the same hashtag block to every description, so
     all 100+ published videos shared an identical metadata fingerprint. Now the
     metadata is computed once, varies per video, and is stored in the manifest.

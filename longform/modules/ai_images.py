@@ -70,7 +70,10 @@ def _clear_old_images():
 
 def _fetch_one(requests, prompt, dest, width, height, seed):
     full = (
-        f"{get_cfg('ai_images.style', 'soft warm childrens storybook illustration, gentle cartoon style, wholesome, no text, no words')}, "
+        # Fallback style must match the channel. The storybook-cartoon default
+        # this replaced would have rendered Krishna as a children's cartoon if
+        # ai_images.style were ever missing from config.json.
+        f"{get_cfg('ai_images.style', 'cinematic indian mythological art, dramatic warm lighting, saffron and deep blue palette, volumetric god rays, painterly, devotional, no text, no letters')}, "
         f"{prompt}"
     )
     url = POLLINATIONS_URL + urllib.parse.quote(full)

@@ -68,7 +68,13 @@ TOKEN_FILE = os.path.join(str(BASE_DIR), "yt_token_manage.json")
 CLIENT_SECRET_FILE = os.path.join(str(BASE_DIR), "yt_client_secret.json")
 
 # The exact fingerprint the old uploader stamped onto every title.
-LEGACY_MARKERS = ("| Cute & Wholesome", "Cute & Wholesome #shorts")
+# Markers that identify an un-optimised title from BEFORE the SEO engine existed.
+# The cute-pets markers are kept because they cost nothing, but they will never
+# match on this channel - it is new, so its only "legacy" titles are bare ones
+# with no search anchor at all. --only-legacy is therefore of limited use here;
+# run without it once there are older uploads worth rewriting.
+LEGACY_MARKERS = ("| Cute & Wholesome", "Cute & Wholesome #shorts",
+                  "| Cute &", "#shorts #cute")
 
 
 # --------------------------------------------------------------------------

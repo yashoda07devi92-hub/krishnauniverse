@@ -1,76 +1,110 @@
-# SEO & metadata conventions for this repo
+# Conventions for this repo
 
-Read this before touching anything that produces titles, descriptions, hashtags, tags or
-on-screen text. These rules exist because the channel previously shipped 113 videos with an
-identical metadata fingerprint, which is both a distribution problem and a
-[YouTube "inauthentic content"](https://support.google.com/youtube/answer/1311392)
-monetisation risk (the policy names *generic, repetitive, or template-based content* as
-ineligible).
+Read this before touching anything that produces titles, descriptions, hashtags, tags,
+on-screen text, or visuals.
+
+This is a **Hindi** channel about श्रीकृष्ण की लीलाएँ. It was ported from an English
+cute-pets pipeline, and several of these rules exist specifically because a value carried
+over from that channel would fail here silently — no exception, no error, just a wrong or
+broken video published to a real audience.
 
 ## Hard rules
 
-0. **Rolling word-by-word captions stay OFF.** `captions.enabled` is `false` because the
-   channel owner removed them: the 84px text with a dark backdrop pill covered the animal,
-   which is the only thing the viewer came for. Do not re-enable without asking. The
-   muted-viewer gap is covered by `flash_text` — three 2-3 word phrases in the upper third.
-1. **Never append a fixed string to every title.** No suffixes, no stamped hashtags. The
-   deleted line `f"{base} | Cute & Wholesome #shorts #cute"` is the exact anti-pattern.
-2. **All published metadata comes from the SEO modules** — `modules/seo.py` for Shorts,
+0. **All on-screen text goes through `modules/textrender.py`. Never `TextClip`.**
+   moviepy's `TextClip` shells out to ImageMagick, which fails for Hindi twice over: the
+   inherited DejaVu font has no Devanagari glyphs (every word becomes an empty box), and
+   ImageMagick's `label:`/`caption:` operators do not run a complex-text shaper, so matras
+   and conjuncts land in the wrong places even with a correct font. Neither raises an
+   error. The `font` keys in `config.json` are ignored on purpose — `textrender.find_font()`
+   resolves it.
+
+1. **Narration is Hindi. Image prompts are English.** The image model produces garbled
+   output from Devanagari prompts. `gemini_script` and `longform/modules/story` both request
+   Hindi `text` and English `scene_prompts` / `scenes` in the same call, and
+   `_clean_scene_prompts` drops any prompt that comes back mostly Devanagari.
+
+2. **Split sentences on the danda.** Use `r"(?<=[।.!?])\s+"`, never `r"(?<=[.!?])\s+"`.
+   Hindi uses `।` (U+0964) as its full stop, so splitting on `.` alone leaves a whole
+   paragraph as one sentence — which silently breaks hook swapping, teasers, chapters and
+   word-trimming.
+
+3. **No ASCII-only regex on Hindi text.** `re.findall(r"[A-Za-z]+", ...)` matches nothing in
+   Devanagari. This exact bug was in `longform/modules/seo._lesson_from_moral`, where it
+   would have made every episode fall through to the same hard-coded label — one word
+   repeated across the whole library, invisibly.
+
+4. **`.upper()` is meaningless here.** Devanagari has no letter case. It has been removed
+   everywhere; do not add it back thinking it styles the text.
+
+5. **Rolling word-by-word captions stay OFF for Shorts** (`captions.enabled: false`). The
+   owner removed them on the sibling channel: the large text with a dark backdrop pill
+   covered the subject. The muted-viewer gap is covered by `flash_text` — three 2-4 word
+   Hindi phrases in the upper third, no backdrop. Long-form captions ARE on: a 16:9 frame
+   has room at the bottom and the subject is not filling the screen.
+
+6. **Never append a fixed string to every title.** No suffixes, no stamped hashtags. The
+   deleted line `f"{base} | Cute & Wholesome #shorts #cute"` is the exact anti-pattern —
+   113 videos on the sibling channel shared one metadata fingerprint, which is both a
+   distribution problem and a [YouTube "inauthentic content"](https://support.google.com/youtube/answer/1311392)
+   monetisation risk (the policy names *generic, repetitive, or template-based content* as
+   ineligible).
+
+7. **All published metadata comes from the SEO modules** — `modules/seo.py` for Shorts,
    `longform/modules/seo.py` for long-form. Do not build titles or descriptions inline in
    `generate.py`, `upload_youtube.py` or `modules/youtube.py`.
-3. **Metadata is built once at generate time** and stored in `manifest.json` under
-   `youtube_title` / `youtube_tags` / `hashtags` / `description`. Uploaders read those fields;
-   they never re-derive or re-append.
-4. **Static values in `config.json` (`youtube.hashtags`, `youtube.default_tags`) are fallbacks
-   only.** They apply only when the SEO engine produced nothing.
-5. **Anything user-visible that repeats must be a rotating pool**, not a constant: hooks,
-   on-screen hooks, flash phrases, sign-offs/CTAs, TTS voices, description blocks, title
-   patterns, pinned comments.
-6. **Pools live in `modules/pools.py` / `longform/modules/pools.py`** — one place, easy to
-   grow. Run `python modules/pools.py` to print sizes and fail on duplicates.
-7. **Never select a user-visible string with `random.choice`.** Use
-   `history.pick(name, pool)`, which draws WITHOUT replacement and remembers across runs via
-   `history.json`. `random.choice` puts the item straight back in the bag, so even a
-   150-item pool collides within days (birthday problem: ~50% chance of a repeat inside 15
-   draws).
-8. **Never call `history.pick()` from a dataclass `__post_init__` or any other hot path.**
-   `load_fallback_scripts()` builds a `Script` for all 23 entries of `quotes.json` on a
-   single reel — history picks there drained the hook, screen-hook and flash pools in one
-   run and forced an immediate reset, which is exactly the repetition the system exists to
-   prevent. Placeholders in `__post_init__` use plain `random.choice`; the real pick happens
-   once per reel in `generate_script()`.
-9. **`history.json` and `longform/history.json` must be committed, never gitignored.** Both
-   scheduled workflows push them back (`permissions: contents: write`). Without that, every
-   run starts from an empty history.
 
-## YouTube limits to respect
+8. **Hashtag count must stay ≤ 14.** YouTube ignores **all** hashtags on a video carrying
+   more than 15, so a bigger number means zero working hashtags. Also do not add pure bait
+   (`#viral`, `#funny`, `#memes`): hashtags are a targeting signal, and sending a Krishna
+   katha to a non-devotional audience produces instant swipes, which weakens the video's
+   early retention signal and *reduces* reach.
 
-| Field | Limit | Enforced in |
-|---|---|---|
-| Title | 100 chars (aim ≤72 — the Shorts UI truncates around 40–50 visible) | `seo.TITLE_HARD_LIMIT` |
-| Description | 5,000 chars | `build_description` |
-| Tags | **500 chars total**, separators included | `TAGS_CHAR_BUDGET = 480`, `_trim_tags` |
-| Hashtags | above 15, YouTube ignores **all** of them | `seo.hashtag_count` (9) |
-| Chapters | must start at `0:00`, need ≥3, each ≥10s, else ignored | `longform` `build_chapters` |
-| Thumbnail | 2 MB max | `modules/thumbnail.py` |
+9. **Anything a viewer can notice repeating is drawn through `modules/history.py`**, never
+   with bare `random.choice`. `history.pick` draws WITHOUT replacement and persists across
+   runs. Two follow-ups that were real bugs:
+   - Do not call `history.pick` inside `Script.__post_init__` or similar constructors.
+     `load_fallback_scripts()` builds one object per bundled story on a single reel, which
+     drained several pools in one run and forced an immediate reset.
+   - Key per-subject pools by subject (`"title_patterns_" + subject`). A single shared key
+     let one leela's videos mark another leela's pool dirty, degrading the draw to
+     near-random.
 
-## Before you commit
+10. **Pexels is for ATMOSPHERE only.** There is no footage of Krishna anywhere. Keywords
+    must be things that genuinely exist as stock video — river water, peacocks, cows, diya
+    flames, monsoon rain. The leela itself comes from `ai_images`. A keyword containing
+    "krishna" means the pipeline is searching for footage that does not exist, and the reel
+    silently loses its background.
 
-Run the self-check. It needs no API keys:
+11. **Motion must vary.** `_motion_from_image` picks from 10 camera moves and
+    `_mixed_background` cuts real footage in between generated frames. Do not replace this
+    with a single centre zoom, and do not set `ai_images.motion: false` — that was the
+    shipped default in the long-form pipeline and it is literally what made it a slideshow.
+
+12. **Audio must match the niche.** The synth bed is a tanpura drone with a slow bansuri
+    line in a pentatonic raga; the hook accent is a temple bell or conch. The inherited
+    "uplifting anthem / viral pop hook / Olympic swell" beds are wrong in a way a viewer
+    feels in two seconds. Do not commit hard-coded music URLs that cannot be verified — a
+    link that silently serves the wrong track is worse than no link.
+
+13. **Declare the language on upload.** `defaultLanguage` and `defaultAudioLanguage` must
+    be `hi`. Left unset, YouTube guesses from the title and can serve a Hindi katha to an
+    English audience.
+
+## Before claiming anything works
 
 ```bash
-python seo_report.py -n 40              # Shorts
-python seo_report.py --longform -n 20   # long-form
+python seo_report.py -n 40          # metadata: uniqueness, API limits, SEO shape
+python seo_report.py --longform     # same for the katha pipeline
+python repeat_audit.py --days 90    # nothing repeats before its pool is exhausted
+python check_workflows.py           # YAML, cron validity, IST windows, quota math
 ```
 
-It fails if titles/descriptions/hashtag sets are not sufficiently distinct, if any API limit is
-exceeded, if the legacy `Cute & Wholesome` suffix reappears, or if a video's subject targeting
-drifts from its content (e.g. a kitten video tagged `#babyanddog`).
+Fix the root cause; do not relax a threshold to make a check pass. When a check *is* wrong,
+say why in the code — e.g. the title uniqueness check compares against the mathematical
+ceiling of the decoration space, because a flat percentage passes at 30 days and fails at 90
+for reasons the engine does not control.
 
-## Subject targeting
-
-`detect_subject()` is **weighted, not first-match**: title and footage keywords carry weight 3,
-the narration body weight 1, and the narration's first sentence is excluded entirely because it
-is a randomly assigned generic hook that often names an animal the video does not contain. Do
-not simplify this back to a plain regex scan — that bug caused kitten videos to be tagged and
-hashtagged as baby-and-dog videos and served to the wrong audience.
+**What these tools cannot verify:** the actual video render and Hindi glyph output. There is
+no ffmpeg, Pillow or network access in the dev sandbox. Always run
+**Actions → Run workflow → `selftest: true`** and inspect the artifact before trusting a
+change to the composer, fonts or thumbnails.

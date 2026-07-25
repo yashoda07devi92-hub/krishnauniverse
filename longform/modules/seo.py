@@ -45,48 +45,52 @@ log = logging.getLogger("krishna.seo")
 # Search anchors — what people actually search for in this niche
 # ==========================================================================
 SEARCH_ANCHORS = [
-    "Moral Story",
-    "Bedtime Story",
-    "Story With A Moral",
-    "Moral Stories In English",
-    "Short Story For Kids",
-    "Bedtime Story For Kids",
-    "English Story",
-    "Story For Children",
-    "Moral Stories",
-    "Storytime",
-    "Good Night Story",
-    "Story With A Lesson",
-    "Family Story",
-    "Kids Moral Story",
+    "कृष्ण कथा",
+    "श्रीकृष्ण की कथा",
+    "महाभारत की कथा",
+    "गीता उपदेश",
+    "कृष्ण लीला",
+    "भक्ति कथा",
+    "हिंदी कथा",
+    "पौराणिक कथा",
+    "कान्हा की कहानी",
+    "Krishna Story In Hindi",
+    "श्रीकृष्ण लीला",
+    "प्रेरणादायक कथा",
+    "धार्मिक कथा",
+    "कृष्ण कथा हिंदी में",
 ]
 
 AUDIENCE_QUALIFIERS = [
-    "For Kids",
-    "For Children",
-    "In English",
-    "Bedtime Story",
-    "Family Story",
-    "Read Aloud",
+    "हिंदी में",
+    "पूरी कथा",
+    "सम्पूर्ण कथा",
+    "एक सीख के साथ",
+    "परिवार के लिए",
+    "बच्चों के लिए",
+    "पूरी कथा हिंदी में",
+    "एक गहरी सीख के साथ",
+    "सुनिए और सोचिए",
+    "श्रद्धा के साथ",
 ]
 
 TITLE_PATTERNS = [
     "{core} | {anchor} {qualifier}",
-    "{core} - {anchor}",
+    "{core} — {anchor}",
     "{anchor}: {core}",
     "{core} | {anchor}",
-    "{core} 🌙 {anchor} {qualifier}",
     "{anchor} {qualifier} | {core}",
-    "{core} | A Story About {lesson}",
-    "{core} - {anchor} {qualifier}",
-    "{core} | {lesson} {anchor}",
-    "{core} ✨ {anchor}",
-    "{anchor} About {lesson} | {core}",
-    "{core} | {anchor} You'll Remember",
-    "{core} - A {lesson} Story {qualifier}",
-    "{core} | Heartwarming {anchor}",
-    "{anchor} - {core} ({lesson})",
-    "{core} 🌟 {anchor} {qualifier}",
+    "{core} | {lesson} की सीख देने वाली कथा",
+    "{core} — {anchor} {qualifier}",
+    "{core} | {lesson} | {anchor}",
+    "{anchor} | {core} — पूरी कथा",
+    "{core} | ये कथा अंत तक सुनिए | {anchor}",
+    "{core} — {lesson} की कथा {qualifier}",
+    "{core} | {anchor} जो सोच बदल दे",
+    "{anchor} — {core} ({lesson})",
+    "{core} | सम्पूर्ण {anchor} {qualifier}",
+    "{core} | {anchor} और उसकी गहरी सीख",
+    "जानिए {core} | {anchor}",
 ]
 
 TITLE_SOFT_LIMIT = 88
@@ -99,17 +103,34 @@ def _clean_core(core):
     core = core.replace('"', "").strip()
     core = re.sub(r"\s+", " ", core)
     core = core.rstrip(".,;:-—|")
-    return core or "A Story Worth Hearing"
+    return core or "श्रीकृष्ण की एक कथा"
 
 
 def _lesson_from_moral(moral):
-    """Pull a 1-3 word lesson label out of the one-sentence moral."""
+    """Pull a short label out of the one-sentence Hindi moral.
+
+    The version this replaces used re.findall(r"[A-Za-z]+", ...), which matches
+    NOTHING in Devanagari - so on a Hindi channel every single episode would have
+    fallen through to the same hard-coded default and the {lesson} slot in every
+    title pattern would have been identical. That is the exact repetition this
+    module exists to prevent, and it would have been invisible: no error, just
+    one word repeated across the whole library.
+    """
     text = str(moral or "").strip()
+    # Strip the fixed opener the prompt asks the model to use.
+    text = re.sub(r"^इस कथा की सीख (यही है )?कि\s*", "", text)
     text = re.sub(r"^the moral of the story is( that)?\s*", "", text, flags=re.I)
-    words = [w for w in re.findall(r"[A-Za-z]+", text) if len(w) > 3]
+    # \w with re.UNICODE covers Devanagari; drop very short particles.
+    stop = {"है", "कि", "को", "का", "की", "के", "में", "से", "और", "ही",
+            "जो", "वो", "यह", "ये", "पर", "तो", "भी", "एक", "हैं", "नहीं"}
+    words = [w for w in re.findall(r"[\w\u0900-\u097F]+", text, re.UNICODE)
+             if len(w) > 2 and w not in stop]
     if not words:
-        return "Kindness"
-    return " ".join(w.capitalize() for w in words[:2])
+        return "भक्ति"
+    # ONE word, not two. Hindi is dense - the first content word is already the
+    # concept ("क्षमा", "अहंकार", "धैर्य"), whereas taking two produced labels
+    # like "क्षमा सबसे", which reads as a truncated sentence inside a title.
+    return words[0]
 
 
 def build_title(core_title, moral="", rng=None):
@@ -143,9 +164,9 @@ def build_title(core_title, moral="", rng=None):
 
 MIN_CHAPTER_SECONDS = 11
 CHAPTER_LABELS = [
-    "The Beginning", "A Small Problem", "Something Changes", "The Hard Part",
-    "A Difficult Choice", "The Turning Point", "What Happened Next",
-    "The Truth Comes Out", "Putting It Right", "The Ending", "The Moral",
+    "कथा का आरंभ", "एक समस्या", "कुछ बदलता है", "कठिन घड़ी",
+    "एक मुश्किल फैसला", "कथा का मोड़", "आगे क्या हुआ",
+    "सच सामने आया", "सब ठीक होता है", "कथा का अंत", "इस कथा की सीख",
 ]
 
 
@@ -169,7 +190,7 @@ def build_chapters(text, duration_seconds, count=6, rng=None):
     if duration < MIN_CHAPTER_SECONDS * 3:
         return []
 
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+", str(text or "").strip()) if s]
+    sentences = [s for s in re.split(r"(?<=[।.!?])\s+", str(text or "").strip()) if s]
     if len(sentences) < 6:
         return []
 
@@ -213,41 +234,71 @@ def build_chapters(text, duration_seconds, count=6, rng=None):
 # ==========================================================================
 DESC_OPENERS = [
     "{hook}",
-    "{hook} Settle in — this one is worth the few minutes.",
-    "{hook} A gentle {anchor_lc} the whole family can listen to together.",
-    "{hook} Stay till the end for the lesson.",
+    "{hook} आराम से बैठिए — ये कथा पूरे कुछ मिनट के लायक है।",
+    "{hook} एक शांत {anchor_lc}, जो पूरा परिवार साथ बैठकर सुन सकता है।",
+    "{hook} सीख के लिए अंत तक ज़रूर सुनिए।",
 ]
 
 DESC_QUESTIONS = [
-    "What did you think of the ending? Tell us in the comments 👇",
-    "Which character would you have been? Comment below!",
-    "Did you guess how it would end? Let us know 👇",
-    "What lesson would you want your children to take from this? Comment below.",
-    "If this story reached you, leave a ❤️ so we know which ones to tell more of.",
+    "इस कथा का अंत आपको कैसा लगा? कमेंट में बताइए 👇",
+    "आप इस कथा में किस पात्र की जगह होते? कमेंट कीजिए!",
+    "क्या आपने अंदाज़ा लगा लिया था कि अंत क्या होगा? बताइए 👇",
+    "इस कथा से आप अपने बच्चों को क्या सीख देना चाहेंगे? कमेंट कीजिए।",
+    "अगर ये कथा दिल तक पहुँची तो एक 🙏 कमेंट कर दीजिए।",
+    "कमेंट में जय श्री कृष्ण लिखिए 🙏",
+    "अगली कथा किस लीला पर चाहिए? कमेंट में बताइए 👇",
+    "आपकी सबसे पसंदीदा कृष्ण लीला कौन सी है? 👇",
+    "आपकी सबसे पसंदीदा कृष्ण लीला कौन सी है? कमेंट कीजिए।",
+    "इस कथा की सीख को अपने शब्दों में लिखिए 👇",
+    "क्या आपने ये कथा पहले सुनी थी? बताइए।",
+    "आप किस शहर से सुन रहे हैं? कमेंट में लिखिए।",
+    "अगली कथा किस लीला पर चाहिए? बताइए 👇",
+    "इस कथा का कौन सा हिस्सा सबसे ज़्यादा छू गया?",
+    "कमेंट में राधे राधे लिखिए 🙏",
+    "आपके परिवार में ये कथा कौन सुनाता था? 👇",
+    "क्या ये सीख आज भी लागू होती है? कमेंट कीजिए।",
+    "कमेंट में जय कन्हैया लाल की लिखिए 🙏",
+    "आपको कान्हा की कौन सी बात सबसे प्यारी लगती है?",
+    "अगर सहमत हैं तो एक ❤️ कमेंट कीजिए।",
 ]
 
 DESC_CTAS = [
-    "Subscribe for a brand-new story every single day.",
-    "Hit subscribe so tomorrow's story finds you automatically.",
-    "New story daily — subscribe and turn on the bell so you never miss one.",
-    "If you enjoyed this, subscribing is the one thing that helps most.",
+    "ऐसी ही कथाओं के लिए चैनल को Subscribe कीजिए।",
+    "Subscribe कर लीजिए, ताकि अगली कथा अपने आप आप तक पहुँच जाए।",
+    "रोज़ नई कथा — Subscribe कीजिए और घंटी दबा दीजिए।",
+    "अगर कथा अच्छी लगी, तो एक Subscribe सबसे बड़ी मदद है।",
+    "ये कथा अपने परिवार के साथ शेयर कीजिए।",
+    "Like और Subscribe करके साथ बने रहिए।",
+    "जय श्री कृष्ण। Subscribe करके साथ बने रहिए।",
+    "अगर कथा दिल तक पहुँची तो Subscribe कीजिए।",
+    "और गहरी कथाएँ आ रही हैं — Subscribe कर लीजिए।",
+    "इस कथा को अपने बच्चों को भी सुनाइए।",
+    "राधे राधे। Subscribe करके जुड़े रहिए।",
+    "Subscribe कीजिए और घंटी दबा दीजिए, कोई कथा नहीं छूटेगी।",
+    "अगर अंत तक सुना, तो एक Like ज़रूर कीजिए और Subscribe भी।",
+    "हरे कृष्ण। ऐसी कथाओं के लिए चैनल से जुड़िए।",
+    "ये कथा किसी अपने को Share कीजिए।",
+    "जय कन्हैया लाल की। Subscribe करके परिवार का हिस्सा बनिए।",
+    "अगली कथा और सुंदर है — Subscribe कर लीजिए।",
+    "रोज़ एक कथा चाहिए तो Subscribe कीजिए।",
+    "अगर मन को शांति मिली तो Subscribe कीजिए।",
+    "Subscribe करके अगली कथा का इंतज़ार कीजिए।",
 ]
 
 DESC_ABOUT_TEMPLATES = [
-    "{channel} tells gentle, heart-touching stories for the whole family. Every "
-    "episode carries one clear lesson — honesty, kindness, courage, patience — "
-    "wrapped in a story children actually want to sit through.",
-    "Welcome to {channel}. These are calm, screen-time-you-feel-good-about "
-    "stories: simple language, real emotion, and a moral you can talk about "
-    "together afterwards.",
-    "{channel} publishes one narrated story a day for families. Perfect for "
-    "bedtime, car rides, quiet afternoons, or classroom listening time.",
+    "{channel} पर भगवान श्रीकृष्ण के जीवन की कथाएँ सरल हिंदी में सुनाई जाती हैं। "
+    "हर कथा में एक साफ़ सीख होती है — सत्य, धैर्य, क्षमा, भक्ति — और वो कथा के "
+    "साथ इतनी सहजता से आती है कि बच्चे भी अंत तक सुनते हैं।",
+    "{channel} में आपका स्वागत है। यहाँ श्रीकृष्ण की बाल लीला से लेकर गीता के "
+    "उपदेश तक, हर कथा शांत भाव और आसान भाषा में — ऐसी जिस पर बाद में बात की जा सके।",
+    "{channel} रोज़ एक कथा लेकर आता है। रात को सोने से पहले, सफ़र में, या शांत "
+    "दोपहर में — पूरे परिवार के साथ सुनने के लिए।",
 ]
 
 WHO_ITS_FOR = [
-    "Best for: bedtime listening, family screen time, road trips, and classrooms.",
-    "Great for children aged 4-10, and for any adult who still likes a good story.",
-    "Made to be listened to as much as watched — put it on and just listen.",
+    "किसके लिए: रात को सोने से पहले, परिवार के साथ, सफ़र में, और बच्चों की कथा-समय के लिए।",
+    "4 से 10 साल के बच्चों के लिए, और उन बड़ों के लिए भी जिन्हें अच्छी कथा पसंद है।",
+    "देखने से ज़्यादा सुनने के लिए बनाई गई है — लगाइए और शांति से सुनिए।",
 ]
 
 PRODUCTION_NOTE = (
@@ -255,11 +306,12 @@ PRODUCTION_NOTE = (
     "illustrated with generated artwork and licensed royalty-free footage and music."
 )
 
-HASHTAG_CORE = ["#moralstories", "#bedtimestories", "#storiesforkids"]
+HASHTAG_CORE = ["#कृष्णकथा", "#श्रीकृष्ण", "#भक्ति"]
 HASHTAG_ROTATE = [
-    "#moralstory", "#storytime", "#kidsstories", "#englishstories",
-    "#shortstories", "#storiesinenglish", "#familytime", "#bedtimestory",
-    "#moralofthestory", "#childrensstories", "#goodnightstories", "#lifelessons",
+    "#कृष्ण", "#krishna", "#कृष्णलीला", "#गीता", "#भगवद्गीता",
+    "#महाभारत", "#mahabharat", "#राधेराधे", "#जयश्रीकृष्ण", "#हरेकृष्ण",
+    "#हिंदीकहानी", "#पौराणिककथा", "#कथा", "#भक्तिकथा", "#सनातनधर्म",
+    "#वृंदावन", "#राधाकृष्ण", "#जीवनसीख", "#प्रेरणा", "#अध्यात्म",
 ]
 
 
@@ -273,10 +325,10 @@ def build_hashtags(rng=None, count=8):
 
 
 TAG_EVERGREEN = [
-    "moral stories", "bedtime stories", "stories for kids", "moral story",
-    "short story with moral", "moral of the story", "english moral story",
-    "story for children", "storytime", "kids stories in english",
-    "bedtime story for children", "good moral stories",
+    "कृष्ण कथा", "krishna story in hindi", "श्रीकृष्ण कथा", "भक्ति कथा",
+    "गीता उपदेश", "महाभारत कथा", "कृष्ण लीला", "hindi moral story",
+    "पौराणिक कथा", "प्रेरणादायक कहानी", "krishna leela", "sanatan dharma",
+    "कान्हा की कहानी", "hindi kahani", "धार्मिक कथा",
 ]
 
 TAGS_CHAR_BUDGET = 480
@@ -317,7 +369,7 @@ def build_tags(core_title="", moral="", keywords=None, rng=None, extra=None):
 def build_description(story, duration_seconds=None, hashtags=None, rng=None):
     """Compose the full long-form description, chapters included."""
     rng = rng or random
-    channel = get_cfg("channel.name", "Sweet Soul Stories")
+    channel = get_cfg("channel.name", "Krishna Universe")
     anchor = rng.choice(SEARCH_ANCHORS)
     hook = (getattr(story, "hook", "") or "").strip()
     moral = (getattr(story, "moral", "") or "").strip()

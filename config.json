@@ -120,7 +120,7 @@
   },
   "seo": {
     "comment": "Consumed by modules/seo.py. hashtag_count stays under 15 because YouTube ignores ALL hashtags on a video carrying more than 15.",
-    "hashtag_count": 9,
+    "hashtag_count": 14,
     "channel_url": "https://www.youtube.com/@KrishnaUniverse"
   },
   "thumbnail": {

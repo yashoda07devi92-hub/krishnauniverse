@@ -48,7 +48,7 @@ def _caption(entry):
     title = entry.get("title", "A Krishna Universe Story")
     hashtags = get_cfg(
         "youtube.hashtags",
-        "#shorts #cute #puppy #baby #aww #animals #wholesome #heartwarming",
+        "#कृष्ण #कृष्णकथा #भक्ति #राधेराधे #krishna #hindikahani #भक्तिकथा",
     )
     return f"{title}\n\nFollow Krishna Universe for your daily dose of joy.\n{hashtags}"
 

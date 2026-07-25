@@ -130,26 +130,32 @@ SEARCH_ANCHORS = {
     "bal_leela": [
         "कृष्ण बाल लीला", "कान्हा की कहानी", "श्रीकृष्ण लीला", "कृष्ण जन्म कथा",
         "बाल कृष्ण कथा", "कान्हा की बाल लीला", "कृष्ण कथा हिंदी",
+            "कान्हा की बचपन की कहानी", "बाल गोपाल कथा", "कृष्ण की बाल कथा",
     ],
     "vrindavan": [
         "वृंदावन की कथा", "राधा कृष्ण कथा", "कृष्ण लीला", "गोवर्धन कथा",
         "कान्हा की लीला", "राधा कृष्ण प्रेम कथा", "कृष्ण कथा",
+            "वृंदावन लीला", "कृष्ण की लीला कथा", "ब्रज की कथा",
     ],
     "gita": [
         "गीता उपदेश", "भगवद गीता हिंदी", "गीता ज्ञान", "श्रीकृष्ण उपदेश",
         "गीता का सार", "कृष्ण अर्जुन संवाद", "गीता सीख",
+            "गीता का उपदेश हिंदी", "श्रीमद्भगवद्गीता", "गीता अध्याय सार",
     ],
     "mahabharat": [
         "महाभारत कथा", "महाभारत की कहानी", "कृष्ण महाभारत", "महाभारत रहस्य",
         "महाभारत सीख", "महाभारत प्रसंग", "कृष्ण कथा महाभारत",
+            "महाभारत का प्रसंग", "महाभारत हिंदी कथा", "महाभारत की सीख",
     ],
     "dwarka": [
         "श्रीकृष्ण कथा", "सुदामा चरित्र", "द्वारकाधीश कथा", "कृष्ण मथुरा कथा",
         "कृष्ण की कहानी", "रुक्मिणी विवाह कथा",
+            "द्वारका की कथा", "कृष्ण द्वारका लीला", "श्रीकृष्ण जीवन कथा",
     ],
     "bhakti": [
         "कृष्ण भक्ति कथा", "श्रीकृष्ण की सीख", "कान्हा की सीख", "कृष्ण उपदेश",
         "प्रेरणादायक कथा", "कृष्ण कथा हिंदी", "भक्ति कथा",
+            "कृष्ण भक्ति की कथा", "श्रीकृष्ण महिमा", "भक्ति की सीख",
     ],
 }
 
@@ -197,6 +203,26 @@ TITLE_PATTERNS = [
     "{core} | {anchor} | आज की सीख",
     "{core} — सुनिए पूरी कथा | {anchor}",
     "{core} | {anchor} | Krishna Story",
+    "{core} | {anchor} | सुनिए पूरी बात",
+    "{anchor} | {core} | एक सीख",
+    "{core} — इसका असली मतलब | {anchor}",
+    "{core} | {anchor} | ज़रूर सुनिए",
+    "क्यों? {core} | {anchor}",
+    "{core} | {anchor} | भक्ति कथा",
+    "{core} — ये किसी ने नहीं बताया | {anchor}",
+    "{anchor} — {core} | सुनिए",
+    "{core} | {anchor} | सीख भरी कथा",
+    "{core} | एक-एक शब्द सुनिए | {anchor}",
+    "{core} — {anchor} | आज की बात",
+    "{core} | {anchor} | कान्हा की कथा",
+    "{core} | यही सबसे बड़ी बात है",
+    "{anchor} | {core} — क्या हुआ था",
+    "{core} — पूरी बात | {anchor}",
+    "{core} | {anchor} | अद्भुत कथा",
+    "{core} | सुनकर मन शांत हो जाएगा",
+    "{anchor}: {core} — एक सीख",
+    "{core} | {anchor} | अनसुनी कथा",
+    "{core} — {anchor} | प्रेरणा",
 ]
 
 # Phrases that are true of EVERY video on this channel, so they can be used to
@@ -228,8 +254,21 @@ def build_title(core_title, text="", keywords=None, subject=None, rng=None):
     core = _clean_core(core_title)
 
     anchors = SEARCH_ANCHORS.get(subject) or SEARCH_ANCHORS[DEFAULT_SUBJECT]
-    anchor = history.pick("title_anchors", list(anchors)) or anchors[0]
-    pattern = history.pick("title_patterns", list(TITLE_PATTERNS)) or TITLE_PATTERNS[0]
+    # PER-SUBJECT history key. A single shared "title_anchors" key put every
+    # subject's anchors in one used-list, so a gita video would mark the whole
+    # list dirty for the next vrindavan video, the small per-subject pool would
+    # read as exhausted, and the draw would reset constantly - degrading to
+    # near-random and colliding far more than the pool size implies. Keyed by
+    # subject, each leela's anchors genuinely rotate without replacement.
+    anchor = history.pick("title_anchors_" + subject, list(anchors)) or anchors[0]
+    # Patterns are keyed per subject for the same reason. A single global pattern
+    # pool cycles every 60 uploads, so a leela that comes up ~40 times across a
+    # 90-day run kept landing on a pattern it had already used with the same
+    # anchor. Keyed per subject, that leela's own videos walk the 60 patterns
+    # nearly without repeating, which is what stops two tellings of the SAME
+    # story from getting an identical title.
+    pattern = (history.pick("title_patterns_" + subject, list(TITLE_PATTERNS))
+               or TITLE_PATTERNS[0])
 
     title = pattern.format(core=core, anchor=anchor)
     title = " ".join(title.split())
@@ -269,8 +308,30 @@ HASHTAG_EMOTION = [
 
 HASHTAG_DISCOVERY = [
     "#हिंदीकहानी", "#कथा", "#storytime", "#हिंदी", "#पौराणिककथा",
-    "#sanatandharma", "#भारत", "#viralshorts", "#trending", "#shortsfeed",
+    "#sanatandharma", "#भारत", "#shortsfeed", "#shortsviral", "#ytshorts",
+    "#हिंदीकथा", "#धर्म", "#krishnalove", "#radhekrishna", "#jaishreekrishna",
+    "#हरेकृष्ण", "#मंदिर", "#आस्था", "#indianmythology", "#devotional",
 ]
+
+# NOTE ON "PUT EVERY VIRAL HASHTAG ON IT"
+# ---------------------------------------
+# Two hard limits make maximising the COUNT counter-productive:
+#
+#   1. YouTube ignores ALL hashtags on a video that carries more than 15. So 30
+#      hashtags does not mean triple the reach - it means ZERO working hashtags.
+#      build_hashtags() is therefore capped at 14, which uses nearly the whole
+#      usable budget with one slot of headroom.
+#
+#   2. Hashtags are a TARGETING signal, not a lottery ticket. Generic tags like
+#      #viral or #funny on a Krishna katha tell YouTube to test the video against
+#      an audience that did not come for devotional content. Those viewers swipe
+#      immediately, the video's early retention drops, and that weak signal
+#      follows it - so an irrelevant "viral" tag actively reduces reach instead of
+#      adding to it. Broad-but-relevant discovery tags (#shortsviral, #ytshorts,
+#      #devotional) are kept; pure bait like #viral, #funny and #memes is not.
+#
+# Reach on this niche comes from the hook, the first frame and retention, which is
+# where the flash text, thumbnail and 24-move motion engine are aimed.
 
 
 def build_hashtags(subject=None, rng=None, count=9):
@@ -424,6 +485,28 @@ DESC_OPENERS = [
     "श्रीकृष्ण कहते हैं:",
     "एक कथा आपके लिए:",
     "आज की भक्ति कथा:",
+    "एक कथा जो बार-बार याद आती है:",
+    "आज सुनिए ये प्रसंग:",
+    "श्रीकृष्ण की एक अनसुनी बात:",
+    "ये कथा हर किसी को पता होनी चाहिए:",
+    "एक छोटी घटना, बड़ी सीख:",
+    "सुनिए, और ठहर कर सोचिए:",
+    "आज का प्रसंग कुछ खास है:",
+    "कान्हा की एक और लीला:",
+    "ये कथा दिल को छू जाती है:",
+    "एक सवाल का जवाब इस कथा में है:",
+    "श्रीकृष्ण ने क्या सिखाया, सुनिए:",
+    "आज की कथा और उसकी सीख:",
+    "एक प्रसंग जो सोच बदल देता है:",
+    "सुनिए ये पुरानी कथा:",
+    "कान्हा का एक और रूप:",
+    "आज की बात ध्यान से सुनिए:",
+    "एक कथा, एक जवाब:",
+    "श्रीकृष्ण की लीला और उसका अर्थ:",
+    "ये प्रसंग आपके काम आएगा:",
+    "आज सुनिए कान्हा की ये कथा:",
+    "एक कथा जो शांति देती है:",
+    "श्रीकृष्ण की सीख, आसान शब्दों में:",
 ]
 
 DESC_QUESTIONS = [
@@ -451,6 +534,22 @@ DESC_QUESTIONS = [
     "ये कथा किसे याद दिलाना चाहेंगे?",
     "कमेंट में एक शब्द लिखिए — कृष्ण।",
     "आपके घर में कौन सी कथा सबसे ज़्यादा सुनाई जाती है?",
+    "आपने ये कथा पहले कहाँ सुनी थी? कमेंट कीजिए।",
+    "इस सीख को एक लाइन में अपने शब्दों में लिखिए।",
+    "कान्हा की कौन सी लीला आपको सबसे प्यारी लगती है?",
+    "क्या आप रोज़ कृष्ण कथा सुनते हैं? बताइए।",
+    "इस कथा में सबसे अच्छा हिस्सा कौन सा था?",
+    "आप किस शहर से सुन रहे हैं? कमेंट कीजिए।",
+    "कमेंट में जय कन्हैया लाल की लिखिए।",
+    "ये सीख आपके किस काम आएगी? बताइए।",
+    "अगर सहमत हैं तो एक ❤️ कमेंट कीजिए।",
+    "आपके परिवार में ये कथा कौन सुनाता था?",
+    "क्या ये बात आज भी लागू होती है? कमेंट कीजिए।",
+    "कमेंट में राधे कृष्णा लिखिए।",
+    "आपको कौन सी सीख सबसे ज़्यादा छू गई?",
+    "इस कथा पर आपकी राय क्या है? लिखिए।",
+    "अगली बार कौन सी लीला सुनाऊँ? बताइए।",
+    "क्या आपने कभी ऐसा अनुभव किया है? कमेंट कीजिए।",
 ]
 
 DESC_CTAS = [
@@ -472,6 +571,28 @@ DESC_CTAS = [
     "अगर सीख काम की लगी तो शेयर कीजिए।",
     "Like, Share और Subscribe — बस इतना ही।",
     "अगली कथा के लिए जुड़े रहिए।",
+    "रोज़ एक कथा चाहिए तो Subscribe कर लीजिए।",
+    "कान्हा की और कथाओं के लिए Subscribe कीजिए।",
+    "अगर ये सीख काम की लगी तो Share कीजिए।",
+    "Subscribe करके घंटी दबा दीजिए, कोई कथा नहीं छूटेगी।",
+    "जय कन्हैया लाल की। Subscribe करके साथ दीजिए।",
+    "ये कथा किसी अपने को Share कीजिए।",
+    "और गहरी कथाएँ आ रही हैं — Subscribe कीजिए।",
+    "अगर मन शांत हुआ तो Like और Subscribe कीजिए।",
+    "राधे राधे। Subscribe करके जुड़े रहिए।",
+    "अगली कथा और भी सुंदर है — Subscribe कर लीजिए।",
+    "Subscribe कीजिए, रोज़ एक सीख आपके पास आएगी।",
+    "इस कथा को अपने बच्चों को भी सुनाइए, और चैनल Subscribe कीजिए।",
+    "हरे कृष्ण। चैनल Subscribe करके साथ चलिए।",
+    "एक Share से ये कथा किसी और तक पहुँच जाएगी।",
+    "अगर अंत तक सुना तो Subscribe ज़रूर कीजिए।",
+    "जय श्री कृष्ण। Subscribe करके परिवार का हिस्सा बनिए।",
+    "और कथाएँ सुनने के लिए Follow कर लीजिए।",
+    "अगर दिल को अच्छा लगा तो Share कीजिए।",
+    "Subscribe कीजिए और रोज़ एक कथा सुनिए।",
+    "राधे राधे। साथ बने रहिए, कथाएँ जारी हैं।",
+    "इस कथा को Share कीजिए, किसी का दिन बन जाएगा।",
+    "Subscribe करके अगली कथा का इंतज़ार कीजिए।",
 ]
 
 DESC_ABOUT = [
@@ -624,6 +745,14 @@ PINNED_COMMENTS = [
     "कमेंट में अपना नाम और जय श्री कृष्ण लिखिए 🙏",
     "अगर काम की बात लगी तो शेयर कीजिए और कमेंट कीजिए 👇",
     "आप किस उम्र से कृष्ण कथा सुन रहे हैं? 👇",
+    "क्या आपको ये कथा पहले से पता थी? हाँ या ना 👇",
+    "आपके परिवार में ये कथा कौन सुनाता था? 👇",
+    "ये कथा किसे भेजना चाहेंगे? टैग कीजिए 👇",
+    "आपको कौन सी सीख सबसे ज़्यादा छू गई? 👇",
+    "अगली कथा किस लीला पर बनाऊँ? कमेंट कीजिए 👇",
+    "अगर सहमत हैं तो एक 🙏 कमेंट कर दीजिए",
+    "आप किस शहर से सुन रहे हैं? नाम लिखिए 👇",
+    "क्या आपने कभी ऐसा अनुभव किया है? बताइए 👇",
 ]
 
 

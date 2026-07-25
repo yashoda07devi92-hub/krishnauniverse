@@ -1,165 +1,188 @@
-# 🐾 Krishna Universe — Faceless YouTube Shorts Automation
+# Krishna Universe
 
-Fully automated, **free + open-source** pipeline for a faceless YouTube Shorts
-channel in the **heartwarming cute pets & babies** niche (USA / English).
+Automated Hindi YouTube channel: श्रीकृष्ण की लीलाएँ और उनसे मिलने वाली सीख.
 
-Each run:
-1. ✍️ Writes a ~150-word wholesome script (Google **Gemini**, with a local
-   `quotes.json` fallback so it works even with no API key).
-2. 🎙️ Generates a warm USA female voiceover (**edge-tts**, falling back to
-   **gTTS** automatically — including on GitHub runner `403`s).
-3. 🎬 Builds a cinematic **1080×1920** reel: real **Pexels** footage with fast
-   cuts, a scroll-stopping **5-second animated hook**, Ken-Burns image
-   fallbacks, a keyless **Picsum** safety net, a warm-gradient last resort,
-   plus animated timing-based captions and a subtle cinematic grade
-   (warm wash + soft vignette).
-4. ⬆️ Auto-uploads to **YouTube** (OAuth2). Optional Instagram (off by default).
-5. ⏰ Runs **3× per day** at staggered USA times via GitHub Actions.
+- **Shorts** — 5 per day, 30 seconds each, published at India prime time
+- **Long-form katha** — 3 per week (Mon/Wed/Fri), 5-8 minutes, 20:30 IST
 
-> **Copyright:** Only **Pexels** / **Picsum** free media + **AI** narration are
-> used. No copyrighted or "viral" clips are referenced or downloaded. Add only
-> royalty-free music to `assets/music/`.
+Everything runs on GitHub Actions. No server, no manual step in the normal path.
 
 ---
 
-## 🇬🇧 English Setup Guide
+## The one thing to understand first
 
-### 1. Get free API keys
-| Key | Where | Cost |
-|-----|-------|------|
-| `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey | Free |
-| `PEXELS_API_KEY` | https://www.pexels.com/api/ | Free |
+There is no stock footage of Krishna anywhere in the world.
 
-### 2. YouTube OAuth (one-time)
-1. In **Google Cloud Console**, create a project and enable the **YouTube Data
-   API v3**.
-2. Create an **OAuth client ID** (type: *Desktop app*) and download the JSON —
-   its full contents become `YT_CLIENT_SECRET_JSON`.
-3. Authorize once to mint a token. Easiest local way:
-   ```bash
-   python upload_youtube.py --authorize
-   ```
-   This prints the token JSON — copy it into the `YT_TOKEN_JSON` secret.
-   *Alternatively* use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/):
-   select scope `https://www.googleapis.com/auth/youtube.upload`, exchange for
-   tokens, and copy the resulting JSON.
+That single fact shapes the whole visual layer, and it is the biggest difference
+from the cute-pets pipeline this was ported from. That channel searched Pexels
+for "puppy playing" and got real footage of the actual subject. Here:
 
-### 3. Add the GitHub Secrets
-In your repo: **Settings → Secrets and variables → Actions → New repository
-secret**. Add these four (paste full JSON contents for the YouTube ones):
+- The **leela itself** is generated per story beat (`modules/ai_images.py`),
+  from English scene prompts Gemini returns alongside the Hindi narration.
+- **Real footage is used only for atmosphere** — river water, peacocks, cows,
+  diya flames, monsoon rain. Things that genuinely exist on video sites.
+- The composer **interleaves the two** (`_mixed_background`): two generated
+  frames, then one real moving shot, repeating.
 
-| Secret | Required | Purpose |
-|--------|----------|---------|
-| `GEMINI_API_KEY` | ✅ | AI script writing (falls back to `quotes.json`) |
-| `PEXELS_API_KEY` | ✅ | Cute stock footage/photos |
-| `YT_CLIENT_SECRET_JSON` | ✅ | YouTube OAuth client secret (full JSON) |
-| `YT_TOKEN_JSON` | ✅ | Authorized YouTube token (full JSON) |
-| `IG_USERNAME` / `IG_PASSWORD` | ⛔ optional | Instagram (off by default) |
+That mix is what stops the result reading as a slideshow. Animating a still with
+a slow zoom is not enough — the eye recognises the repeating move. Real motion
+cut in every few seconds gives it something to anchor on, and the generated
+frames around it start reading as filmed. Every still also gets one of 10
+different camera moves (push, pull, pan, tilt, diagonal) rather than the same
+centre zoom every time.
 
-### 4. Schedule (3 posts/day)
-The workflow (`.github/workflows/auto-reel.yml`) runs at **12:00 / 17:00 /
-22:00 UTC**, mapping to USA Eastern Time:
+---
 
-| UTC | ET (EST, winter) | ET (EDT, summer) | Slot |
-|-----|------------------|------------------|------|
-| 12:00 | 07:00 | 08:00 | Morning |
-| 17:00 | 12:00 | 13:00 | Midday |
-| 22:00 | 17:00 | 18:00 | Evening |
+## Setup
 
-Each **scheduled** run makes exactly **one** reel and uploads it → 3 posts/day.
-You can also trigger it manually (**Actions → Krishna Universe Auto Reel → Run
-workflow**) with custom `days` / `per_day` / upload toggles.
+Four GitHub Actions secrets (Settings → Secrets and variables → Actions):
 
-### 5. Run locally
+| Secret | Where to get it | Needed for |
+|---|---|---|
+| `YT_TOKEN_JSON` | See [TOKEN_SETUP.md](TOKEN_SETUP.md) — browser only, no terminal | Uploading |
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/app/apikey) | Writing the katha |
+| `PEXELS_API_KEY` | [pexels.com/api/new](https://www.pexels.com/api/new/) | Atmosphere footage |
+| `POLLINATIONS_TOKEN` | [enter.pollinations.ai](https://enter.pollinations.ai) — take the `sk_` key | Krishna scene images |
+
+`POLLINATIONS_TOKEN` is not optional in practice. On this channel the generated
+images *are* the video, so a rate-limited run produces a katha with no Krishna
+in it.
+
+Also set the channel handle in `config.json` → `channel.url` and
+`seo.channel_url`. It is printed in every description, so a wrong handle sends
+viewers nowhere.
+
+---
+
+## Before you let the schedule run
+
+Run one manual test: **Actions → Krishna Universe Auto Reel → Run workflow →
+`selftest: true`**. This renders a real reel but does **not** upload it. Download
+the artifact and check:
+
+1. **Hindi text renders correctly** — not empty boxes, and matras/conjuncts in
+   the right places. This is the highest-risk item and cannot be verified
+   without actually rendering. See the font note below.
+2. The flash text is readable and not covering the subject.
+3. The motion looks like camera movement, not a slideshow.
+
+---
+
+## Hindi text: why there is a whole module for it
+
+`modules/textrender.py` exists because the inherited text path could not draw
+Hindi at all, and failed **silently** in two separate ways:
+
+1. The configured font was DejaVu-Sans-Bold, which contains no Devanagari
+   glyphs — every word renders as a row of empty boxes (tofu).
+2. moviepy's `TextClip` shells out to ImageMagick, whose `label:`/`caption:`
+   operators do not run a complex-text shaper. Even with a correct font,
+   "कृष्ण" comes out as "क ृ ष ् ण" and the i-matra in "शिक्षा" lands on the
+   wrong side of the consonant.
+
+Neither raises an error. So all text now renders through Pillow, whose wheels
+bundle libraqm and therefore shape Devanagari properly. The workflow installs
+`fonts-noto-core` and **hard-fails** if no Devanagari font is found — every
+other missing dependency here degrades gracefully, but this one would publish a
+broken video.
+
+---
+
+## Nothing repeats
+
+Every user-visible choice is drawn **without replacement** through
+`modules/history.py`, and the history is committed back to the repo after each
+run so it persists across GitHub Actions jobs.
+
+| Pool | Size | Cycles in |
+|---|---|---|
+| Leelas (with their seekh) | 150 | 30 days |
+| Spoken hooks | 121 | 24 days |
+| On-screen hooks | 80 | 16 days |
+| Flash phrases | 150 | 10 days |
+| Sign-offs | 45 | 9 days |
+| Title patterns | 60 | 12 days |
+| Descriptions (openers/questions/CTAs) | 40 each | 8 days |
+| Long-form kathas | 80 | 27 weeks |
+
+Verify it rather than trusting the table:
+
 ```bash
-# (a) install
-pip install -r requirements.txt
-# also need system tools: ffmpeg + imagemagick (for captions/hook text)
-
-# (b) generate ONE reel
-python generate.py --days 1 --per-day 1
-
-# (c) upload the newest reel to YouTube
-python upload_youtube.py --limit 1 --privacy public
+python repeat_audit.py --days 90
 ```
 
-### 6. Background music (optional)
-Drop one royalty-free track into `assets/music/` (e.g. `soft-piano.mp3`). It is
-auto-mixed under the voiceover at ~12% volume. Sources: YouTube Audio Library,
-Pixabay Music, Free Music Archive. Music files are gitignored.
+This simulates 90 days of publishing and asserts that nothing repeats before its
+pool is genuinely exhausted. It also checks titles against the *mathematical
+ceiling* of the decoration space, not an arbitrary percentage.
 
 ---
 
-## 🇮🇳 हिंदी गाइड (Hindi Guide)
+## Hashtags: why 14 and not 30
 
-### 1. फ्री API keys लें
-- **`GEMINI_API_KEY`** — https://aistudio.google.com/app/apikey से फ्री में लें
-  (AI से स्क्रिप्ट लिखने के लिए; key न हो तो `quotes.json` से अपने-आप काम चलेगा)।
-- **`PEXELS_API_KEY`** — https://www.pexels.com/api/ से फ्री में लें
-  (प्यारे जानवरों/बच्चों के मुफ्त वीडियो/फोटो के लिए)।
+Two hard limits make maximising the count counter-productive:
 
-### 2. YouTube OAuth (एक बार का सेटअप)
-1. **Google Cloud Console** में project बनाएं और **YouTube Data API v3** चालू करें।
-2. **OAuth client ID** (*Desktop app*) बनाकर JSON डाउनलोड करें — इसकी पूरी
-   contents `YT_CLIENT_SECRET_JSON` में जाएगी।
-3. एक बार token बनाएं:
-   ```bash
-   python upload_youtube.py --authorize
-   ```
-   जो JSON दिखे उसे `YT_TOKEN_JSON` secret में डालें। या
-   [OAuth Playground](https://developers.google.com/oauthplayground/) से scope
-   `youtube.upload` चुनकर token बनाएं।
+1. **YouTube ignores ALL hashtags on a video carrying more than 15.** Thirty
+   hashtags does not mean triple the reach — it means zero working hashtags.
+2. **Hashtags are a targeting signal, not a lottery ticket.** `#viral` on a
+   Krishna katha tells YouTube to test the video against an audience that did
+   not come for devotional content. They swipe immediately, early retention
+   drops, and that weak signal follows the video — so an irrelevant "viral" tag
+   *reduces* reach.
 
-### 3. GitHub Secrets जोड़ें
-रिपॉज़िटरी में **Settings → Secrets and variables → Actions** में ये चार secrets
-डालें: `GEMINI_API_KEY`, `PEXELS_API_KEY`, `YT_CLIENT_SECRET_JSON`,
-`YT_TOKEN_JSON` (YouTube वाली में पूरा JSON paste करें)। Instagram वाली
-(`IG_USERNAME`/`IG_PASSWORD`) optional हैं और by default बंद हैं।
+So the count is 14 (one slot of headroom under the cliff), and the pools are
+broad-but-relevant (`#shortsviral`, `#ytshorts`, `#devotional`) rather than pure
+bait. Reach in this niche comes from the hook, the first frame and retention.
 
-### 4. शेड्यूल (दिन में 3 बार)
-Workflow हर दिन **12:00 / 17:00 / 22:00 UTC** पर चलता है, जो अमेरिका के सुबह,
-दोपहर और शाम के समय से मेल खाता है। हर scheduled run में **एक** reel बनती और
-अपलोड होती है — यानी रोज़ 3 posts।
+---
 
-### 5. लोकल रन
+## Verification tools
+
 ```bash
-pip install -r requirements.txt        # साथ में ffmpeg + imagemagick चाहिए
-python generate.py --days 1 --per-day 1 # एक reel बनाएं
-python upload_youtube.py --limit 1      # YouTube पर अपलोड करें
+python seo_report.py -n 40          # metadata: uniqueness, API limits, SEO shape
+python seo_report.py --longform     # same for the katha pipeline
+python repeat_audit.py --days 90    # nothing repeats before it must
+python check_workflows.py           # YAML, cron validity, IST windows, API quota
+python diagnose.py                  # which API keys and sources are actually live
 ```
 
-### 6. बैकग्राउंड म्यूज़िक (वैकल्पिक)
-`assets/music/` में कोई एक royalty-free गाना डालें — वह voiceover के नीचे ~12%
-वॉल्यूम पर अपने-आप मिक्स हो जाएगा। (कॉपीराइट-फ्री म्यूज़िक ही इस्तेमाल करें।)
+None of these need media libraries or a running render.
 
 ---
 
-## 🗂️ Project Structure
+## Layout
+
 ```
-krishnauniverse/
-├── generate.py              # full pipeline CLI (--days/--per-day/--limit/--topic)
-├── upload_youtube.py        # YouTube uploader CLI (--authorize/--limit/--privacy)
-├── upload_instagram.py      # optional IG uploader (off by default)
-├── config.json              # palette, voice, captions, hook, grade, posting settings
-├── quotes.json              # 22+ pre-written fallback scripts
-├── requirements.txt         # pinned, free deps (no openai-whisper; Pillow 9.5.0)
-├── .env.example             # all env vars (no real secrets)
-├── assets/music/.gitkeep    # drop royalty-free music here
-├── modules/
-│   ├── config.py            # paths, env, config, logging
-│   ├── gemini_script.py     # Gemini -> quotes.json fallback; derived hook
-│   ├── tts.py               # edge-tts -> gTTS fallback
-│   ├── pexels_video.py      # robust Pexels VIDEO search (multi-pass)
-│   ├── images.py            # Pexels PHOTOS + keyless Picsum images
-│   ├── subtitles.py         # timing-based captions (no whisper)
-│   ├── video_composer.py    # background chain + Ken-Burns + grade + hook
-│   ├── youtube.py           # YouTube Data API v3 upload (OAuth2)
-│   └── instagram.py         # optional instagrapi upload
-└── .github/workflows/auto-reel.yml   # 3×/day schedule + manual dispatch
+config.json              Shorts settings (every non-obvious value has a comment)
+generate.py              Build reels -> output/ + manifest.json
+upload_youtube.py        Upload from the manifest
+modules/
+  pools.py               150 leelas, hooks, flash phrases, sign-offs
+  gemini_script.py       Hindi narration + English scene prompts
+  ai_images.py           Krishna scene frames (1080x1920)
+  pexels_video.py        Atmosphere footage only
+  video_composer.py      Motion engine, mixing, audio, overlays
+  textrender.py          Devanagari-safe text (see above)
+  seo.py                 Titles, descriptions, tags, hashtags
+  history.py             Draw-without-replacement, persisted
+  thumbnail.py           Shorts thumbnail (channel grid / search)
+longform/                The same shape, for 5-8 minute kathas
+.github/workflows/       Schedules + two manual buttons
 ```
 
-## ⚖️ License & Content Notes
-- Footage/photos: **Pexels** & **Picsum** (free to use). Narration: **AI**-generated.
-- Do **not** add copyrighted or third-party "viral" clips.
-- Automated Instagram posting can violate IG's ToS and risk bans — it is **off
-  by default** and provided for completeness only.
+Manual buttons in the Actions tab: **Fix Old Video Titles** (dry-run by default,
+protects the top 15 performers) and **Slot Report** (read-only; shows which
+publish hour actually earns views).
+
+---
+
+## Known limitations
+
+- **Video render and Hindi glyph output are unverified.** They cannot be checked
+  without ffmpeg, Pillow and network access. Run the selftest before trusting
+  the schedule.
+- **Pinned comments are manual.** The upload token carries only the
+  `youtube.upload` scope, which cannot post comments — and there is no YouTube
+  API to *pin* one at all. `generate.py` logs suggested text to paste.
+- **Music is synthesized** (tanpura drone + slow bansuri line in a pentatonic
+  raga). Commit your own royalty-free instrumental `.mp3` files to
+  `assets/music/` to override it.

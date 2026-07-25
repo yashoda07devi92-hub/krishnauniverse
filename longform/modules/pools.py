@@ -1,159 +1,245 @@
+# -*- coding: utf-8 -*-
 """
-Content pools for the long-form storytelling pipeline.
+Content pools for the long-form Hindi katha pipeline.
 
 Same reasoning as modules/pools.py on the Shorts side: everything a viewer can
-notice repeating lives in one place so it can be grown without touching pipeline
-logic, and selection runs through modules/history.py so items are drawn WITHOUT
-replacement rather than with `random.choice`.
+notice repeating lives in one place, and selection runs through
+modules/history.py so items are drawn WITHOUT replacement.
 
-    lesson/topic seeds   20  ->  80     (1 per episode -> ~26 weeks at 3/week)
-    spoken sign-offs      5  ->  30     (1 per episode -> ~10 weeks)
+    katha seeds        80   (1 per episode -> ~26 weeks at 3/week)
+    spoken sign-offs   30   (1 per episode -> ~10 weeks)
 
-Long-form only publishes 3 times a week, so these pools last far longer than the
-Shorts equivalents even at a smaller size.
+WHY LONG-FORM MATTERS MORE THAN THE SHORTS HERE
+-----------------------------------------------
+Watch hours only come from long-form. The Shorts route to monetisation needs
+10 million views in 90 days; the long-form route needs 4,000 hours, which a
+6-8 minute katha reaches with roughly 100k views. These 80 episodes are the
+actual monetisation engine, and they are deliberately the FULL leela rather than
+the 30-second version told on the Shorts side - a viewer who wants the whole
+story is exactly the viewer who watches to the end.
 
 Run `python modules/pools.py` from the longform/ folder to print sizes and catch
 duplicates.
 """
 
 # ==========================================================================
-# LESSON + TOPIC SEEDS  (80)
+# KATHA SEEDS  (80)
 # ==========================================================================
-# Each entry is (moral/lesson, story premise). One is drawn per episode and both
-# halves are injected into the Gemini prompt.
+# Each entry is (seekh, katha): the lesson the episode must land on, and the
+# episode's subject. Both halves go into the Gemini prompt. The lesson is passed
+# explicitly because "a Krishna story with a moral" drifts into generic advice
+# that has nothing to do with the leela being told.
 TOPIC_POOL = [
-    # --- honesty & truth (1-10) ---
-    ("honesty", "a child who finds a lost wallet full of money"),
-    ("telling the truth", "a shepherd boy who cried wolf one too many times"),
-    ("honesty", "a woodcutter who drops his only axe into a deep river"),
-    ("owning your mistakes", "a boy who breaks a window and lets another take the blame"),
-    ("honesty", "a shopkeeper who is given the wrong change and could stay quiet"),
-    ("truthfulness", "a girl who invents a story and watches it grow out of control"),
-    ("integrity", "a farmer offered a fortune to sell milk he knows is spoiled"),
-    ("admitting fault", "a young cook who ruins the village feast and must confess"),
-    ("honesty", "a boy who finds the answers to tomorrow's test on the floor"),
-    ("keeping your word", "a prince who gives his word to a humble farmer"),
+    # --- janm aur Gokul (1-10) ---
+    ("सबसे गहरे अंधकार में ही सबसे बड़ी रोशनी जन्म लेती है",
+     "कंस का अत्याचार, आकाशवाणी, और कारागार में श्रीकृष्ण का जन्म"),
+    ("सच्चा प्रेम अपने सुख से ज़्यादा दूसरे की सुरक्षा चुनता है",
+     "वसुदेव का आधी रात में बालक कृष्ण को यमुना पार गोकुल पहुँचाना"),
+    ("जन्म देना और माँ बनना दो अलग बातें हैं",
+     "देवकी की कोख, यशोदा की गोद — दो माँओं की कथा"),
+    ("मीठे शब्दों के पीछे भी ज़हर हो सकता है",
+     "पूतना का सुंदर स्त्री बनकर आना और उसका अंत"),
+    ("जिसे तुम छोटा समझ रहे हो, उसकी गहराई तुमने देखी ही नहीं",
+     "कान्हा का मिट्टी खाना और यशोदा को मुँह में पूरा ब्रह्मांड दिखना"),
+    ("भगवान ताक़त से नहीं, प्रेम की डोर से बँधते हैं",
+     "दामोदर लीला — यशोदा का कान्हा को ऊखल से बाँधना"),
+    ("बंधन कभी-कभी मुक्ति का पहला कदम होता है",
+     "यमलार्जुन वृक्षों का उखड़ना और नलकूबर-मणिग्रीव की शापमुक्ति"),
+    ("जो प्रेम से चुराया जाए, वो चोरी नहीं होती",
+     "माखन चोरी की पूरी कथा और गोपियों की मीठी शिकायतें"),
+    ("जो छिपकर वार करता है, उसका अंत भी छिपकर ही आता है",
+     "शकटासुर और तृणावर्त का वध"),
+    ("कभी-कभी आगे बढ़ने के लिए पुरानी जगह छोड़नी पड़ती है",
+     "गोकुल छोड़कर पूरे व्रज का वृंदावन जाना"),
 
-    # --- kindness & compassion (11-22) ---
-    ("kindness", "a lonely old man and the children who befriend him"),
-    ("compassion", "a child who rescues a wounded sparrow in winter"),
-    ("kindness to animals", "a boy who shares his only bread with a starving street dog"),
-    ("gratitude", "a poor boy who shares his only meal with a stranger"),
-    ("helping others", "village children who rebuild an old woman's broken bridge"),
-    ("kindness returned", "a girl who helps a beggar who turns out to be a traveller king"),
-    ("compassion", "a village that shelters a family driven out by a flood"),
-    ("small kindnesses", "a boy who waters a dying tree every day for a year"),
-    ("caring for elders", "a grandson who carries his grandmother to the temple each week"),
-    ("kindness", "a blind woman and the child who describes the world to her"),
-    ("generosity", "a baker who quietly leaves bread out for whoever needs it"),
-    ("empathy", "a girl who befriends the child everyone else laughs at"),
+    # --- Vrindavan (11-26) ---
+    ("ज़िम्मेदारी उम्र से नहीं, समझ से आती है",
+     "कान्हा का पहली बार गाय चराने जाना और ग्वाल-बालों का साथ"),
+    ("सबसे बड़ा खतरा वो है जो शांत दिखता है",
+     "बकासुर बगुले का छल और उसका अंत"),
+    ("डर बड़ा दिखता है क्योंकि तुम उसके अंदर घुसने से पहले हार मान लेते हो",
+     "अघासुर अजगर की कथा"),
+    ("ज़िद और मूर्खता एक साथ हों तो अंत निश्चित है",
+     "धेनुकासुर और तालवन के मीठे फलों की कथा"),
+    ("हर हँसता चेहरा दोस्त नहीं होता",
+     "प्रलंबासुर का ग्वाल बनकर बच्चों में मिल जाना"),
+    ("एक के अहंकार से पूरा समाज ज़हर पी रहा होता है",
+     "कालिया नाग से यमुना का विषैला होना और कान्हा का उसके फन पर नृत्य"),
+    ("सच्ची क्षमा माँगने वाले को दंड नहीं, दिशा मिलती है",
+     "नाग पत्नियों की प्रार्थना और कालिया को जीवनदान"),
+    ("जब चारों तरफ आग हो, घबराओ मत — भरोसा रखो",
+     "दावानल — जंगल की आग से ग्वालों की रक्षा"),
+    ("खाली होकर ही कोई बांसुरी बन सकता है",
+     "कान्हा की बांसुरी का रहस्य और वेणु-गीत"),
+    ("जो तुम्हें रोज़ पालता है, उसका आदर करो — दिखावे का नहीं",
+     "गोवर्धन पूजा, इंद्र का क्रोध और सात दिन की मूसलाधार बारिश"),
+    ("पद बड़ा होने से इंसान बड़ा नहीं होता, झुकने से होता है",
+     "इंद्र का अहंकार टूटना और गोविंद अभिषेक"),
+    ("जिसे तुम परखने चले थे, वही तुम्हें परख रहा था",
+     "ब्रह्मा का ग्वाल-बालों को छिपाना और एक वर्ष का भ्रम"),
+    ("कुछ रिश्ते जन्म से पहले तय हो जाते हैं",
+     "राधा और कृष्ण की पहली भेंट और उनका अटूट प्रेम"),
+    ("जब प्रेम पूरा हो जाए तो 'मैं' बचता ही नहीं",
+     "महारास की कथा और गोपियों का अहंकार-विसर्जन"),
+    ("जो चीज़ खो जाने पर याद आए, उसकी कीमत तब समझ आती है",
+     "रास के बीच कान्हा का अंतर्ध्यान होना और गोपियों का विरह"),
+    ("जो सबसे मूक की सेवा करे, वही सबसे बड़ा है",
+     "कान्हा और गायों का प्रेम — गोविंद नाम की कथा"),
 
-    # --- hard work & perseverance (23-34) ---
-    ("hard work", "a lazy rabbit who laughs at a slow but steady tortoise"),
-    ("never giving up", "a young bird afraid to take its very first flight"),
-    ("perseverance", "a spider who rebuilds her web every single morning"),
-    ("hard work", "two brothers who inherit the same barren field"),
-    ("patience with practice", "a boy who wants to play music but cannot yet"),
-    ("effort over talent", "the slowest runner in the village who trains all winter"),
-    ("preparation", "ants who store grain while the grasshopper sings"),
-    ("persistence", "a girl who tries ninety-nine times to light a lamp in the wind"),
-    ("hard work", "a potter whose first hundred pots all crack"),
-    ("determination", "a boy who carries one stone a day to build a well"),
-    ("small steps", "a child who learns to swim across a river one metre at a time"),
-    ("never giving up", "a lame calf who learns to climb the hill with the herd"),
+    # --- Mathura (27-40) ---
+    ("कुछ जुदाइयाँ किसी बड़े काम की शुरुआत होती हैं",
+     "अक्रूर जी का आना और वृंदावन से कान्हा की विदाई"),
+    ("जिसे तुम बाहर खोज रहे हो, वो तुम्हारे साथ ही बैठा है",
+     "यमुना में अक्रूर जी को दिव्य दर्शन"),
+    ("जो निःस्वार्थ देता है, उसे सबसे ज़्यादा मिलता है",
+     "कुब्जा का कान्हा को चंदन लगाना और उसका उद्धार"),
+    ("जो नियम अन्याय की रक्षा करे, उसे तोड़ना ही धर्म है",
+     "मथुरा का धनुष यज्ञ और कान्हा का धनुष तोड़ना"),
+    ("पागल ताक़त को शांत बुद्धि हरा देती है",
+     "कुवलयापीड़ हाथी और चाणूर-मुष्टिक से कुश्ती"),
+    ("अत्याचार का सिंहासन जितना ऊँचा हो, गिरने की आवाज़ उतनी बड़ी",
+     "कंस वध और मथुरा की मुक्ति"),
+    ("जो सत्ता जीतकर भी उसे लौटा दे, वही सच्चा विजेता है",
+     "उग्रसेन का पुनः राज्याभिषेक"),
+    ("इंतज़ार लंबा हो तो मिलन और गहरा होता है",
+     "देवकी-वसुदेव से कान्हा की पहली पुत्रवत भेंट"),
+    ("जो सब जानता है, वो भी सीखने के लिए झुकता है",
+     "संदीपनी आश्रम में कान्हा और बलराम की शिक्षा"),
+    ("गुरु का ऋण कभी पूरा नहीं होता",
+     "गुरु दक्षिणा और सांदीपनि के पुत्र को लौटाना"),
+    ("दोस्ती में हैसियत नहीं, याद देखी जाती है",
+     "गुरुकुल में कान्हा और सुदामा की मित्रता"),
+    ("जो हार से नहीं सीखता, वो हार दोहराता रहता है",
+     "जरासंध के सत्रह आक्रमण"),
+    ("समय आने पर काँटा काँटे से ही निकलता है",
+     "कालयवन और राजा मुचुकुंद की कथा"),
+    ("पीछे हटना कायरता नहीं, कभी-कभी रणनीति होती है",
+     "मथुरा छोड़ना और समुद्र से भूमि माँगकर द्वारका का निर्माण"),
 
-    # --- courage (35-44) ---
-    ("courage", "a small boy who must cross a dark forest to fetch medicine"),
-    ("bravery", "a girl who stands up to a bully twice her size"),
-    ("courage", "a shy child who must speak in front of the whole village"),
-    ("facing fear", "a boy terrified of water who must save a drowning puppy"),
-    ("moral courage", "a child who refuses to join in when friends steal fruit"),
-    ("bravery", "a girl who walks through a storm to warn a sleeping village"),
-    ("courage", "the youngest goat who faces the bridge troll alone"),
-    ("standing alone", "a boy who is the only one to tell the king the truth"),
-    ("quiet bravery", "a child who sits with a frightened dog through a thunderstorm"),
-    ("courage", "a young fisherman who rows out to fetch his lost brother"),
+    # --- Dwarka (41-52) ---
+    ("स्वाभिमान और ज़रूरत के बीच का संकोच सबसे भारी होता है",
+     "सुदामा का पत्नी के कहने पर तीन मुट्ठी चावल लेकर द्वारका जाना"),
+    ("सच्चा मित्र माँगने से पहले दे देता है",
+     "सुदामा का लौटकर झोपड़ी की जगह महल पाना"),
+    ("अपने जीवन का फैसला लेने का हक़ हर किसी को है",
+     "रुक्मिणी का पत्र और रुक्मिणी हरण"),
+    ("प्रेम में तुलना शुरू हो जाए तो प्रेम घटने लगता है",
+     "सत्यभामा का अभिमान और पारिजात वृक्ष की कथा"),
+    ("गलतफ़हमी में लड़ी गई लड़ाई सबसे बेकार होती है",
+     "स्यमंतक मणि और जाम्बवान से युद्ध"),
+    ("जिसे समाज ठुकरा दे, उसे सम्मान देना सबसे बड़ा धर्म है",
+     "नरकासुर वध और सोलह हज़ार कन्याओं को सम्मान"),
+    ("धैर्य की भी सीमा होती है",
+     "शिशुपाल के सौ अपमान और राजसूय यज्ञ"),
+    ("हर ताक़त की एक कमज़ोरी होती है — उसे ढूँढना बुद्धि है",
+     "जरासंध का भीम के हाथों अंत"),
+    ("जो सबके साथ है, वो अकेला कभी नहीं होता",
+     "नारद जी का कान्हा के एक दिन का रहस्य जानना"),
+    ("राजा होकर भी साधारण रहना सबसे कठिन तप है",
+     "द्वारकाधीश कान्हा का साधारण जीवन"),
+    ("सच्चा साथी माँगने पर शर्त नहीं रखता",
+     "पांडवों का द्वारका आना और कान्हा का वचन"),
+    ("भोजन में स्वाद नहीं, भाव होता है",
+     "विदुर के घर साग खाकर कान्हा का तृप्त होना"),
 
-    # --- greed & contentment (45-56) ---
-    ("greed", "a fisherman who catches a magical fish that grants wishes"),
-    ("contentment", "a dog who loses his bone chasing a reflection"),
-    ("greed", "a farmer with a goose that lays one golden egg a day"),
-    ("enough is enough", "a merchant who wants one more field, and then one more"),
-    ("contentment", "a city mouse and a country mouse who swap homes"),
-    ("greed", "two travellers who find a bag of gold on a lonely road"),
-    ("sharing", "two brothers and a single basket of mangoes"),
-    ("simple joys", "a rich child who envies a poor child's kite"),
-    ("greed", "a king who wishes everything he touches would turn to gold"),
-    ("generosity over hoarding", "a squirrel who buries more nuts than he could ever eat"),
-    ("contentment", "a peacock who wishes for the nightingale's voice"),
-    ("moderation", "a boy who eats the whole harvest of sweets in one night"),
+    # --- Mahabharat (53-70) ---
+    ("जो सच्चे मन से पुकारे, उसकी लाज कभी नहीं जाती",
+     "द्रौपदी का चीरहरण और कान्हा का चीर बढ़ाना"),
+    ("एहसान भूलना नहीं चाहिए, चाहे वो धागे भर का हो",
+     "द्रौपदी की साड़ी का एक टुकड़ा और कान्हा का ऋण"),
+    ("जगह से नहीं, भाव से रिश्ता बनता है",
+     "दुर्योधन का सिरहाने बैठना और अर्जुन का चरणों में"),
+    ("बड़ा बनने के लिए आगे नहीं, साथ चलना पड़ता है",
+     "कान्हा का अर्जुन का सारथी बनना स्वीकार करना"),
+    ("युद्ध से पहले शांति की एक कोशिश हर हाल में बनती है",
+     "कान्हा का शांति दूत बनकर हस्तिनापुर जाना"),
+    ("लोभ में इंसान अपना सब कुछ दाँव पर लगा देता है",
+     "दुर्योधन का पाँच गाँव देने से भी इनकार"),
+    ("सच देर से मिले तो वो राहत नहीं, बोझ बन जाता है",
+     "कर्ण को उसके जन्म का सत्य बताना"),
+    ("सबसे बड़ी लड़ाई अपने ही मन से होती है",
+     "अर्जुन विषाद योग — रणभूमि में गांडीव रख देना"),
+    ("फल की चिंता छोड़कर किया गया काम कभी बोझ नहीं बनता",
+     "गीता का कर्मयोग — कान्हा का पहला उपदेश"),
+    ("जो कभी मरता ही नहीं, उसके लिए शोक क्यों",
+     "गीता में आत्मा की अमरता का उपदेश"),
+    ("सुख में मत फूलो, दुख में मत टूटो",
+     "स्थितप्रज्ञ और समत्व योग का उपदेश"),
+    ("मन घोड़ा है — लगाम छोड़ी तो खड्ड तय है",
+     "गीता में मन को वश में करने का उपाय"),
+    ("बाहर के दुश्मन से पहले अंदर के तीन दुश्मन जीतो",
+     "काम, क्रोध और लोभ — गीता की चेतावनी"),
+    ("जिसे तुम अपना मित्र समझ रहे थे, वो पूरा ब्रह्मांड है",
+     "अर्जुन को विश्वरूप दर्शन"),
+    ("प्रतिज्ञा अगर अन्याय की रक्षा करे तो वो बोझ बन जाती है",
+     "भीष्म पितामह की प्रतिज्ञा और शरशैया"),
+    ("अधूरा ज्ञान सबसे बड़ा खतरा है",
+     "अभिमन्यु और चक्रव्यूह की कथा"),
+    ("जिसकी ताक़त सबसे बड़ी हो, उसका संयम भी सबसे बड़ा होना चाहिए",
+     "बर्बरीक के तीन बाण, शीश दान और खाटू श्याम बनना"),
+    ("बदले की आग सबसे पहले चलाने वाले को जलाती है",
+     "अश्वत्थामा का ब्रह्मास्त्र और श्राप"),
 
-    # --- humility & wisdom (57-68) ---
-    ("humility", "a proud peacock who learns the value of every creature"),
-    ("wisdom over strength", "a clever mouse who frees a trapped lion"),
-    ("respecting elders", "a clever grandson and his wise old grandmother"),
-    ("humility", "a champion wrestler beaten by a thoughtful child"),
-    ("listening", "a king who ignores every adviser until it is nearly too late"),
-    ("wisdom", "three brothers asked to divide one camel fairly"),
-    ("humility", "a tall tree that mocks the bending reed before the storm"),
-    ("learning from anyone", "a scholar taught something vital by a shepherd"),
-    ("not judging by looks", "a plain clay pot that holds the sweetest water"),
-    ("patience", "a girl who plants a seed and waits through every season"),
-    ("thinking before acting", "a boy who cuts the rope holding the bridge"),
-    ("humility", "a rooster convinced the sun rises because he crows"),
-
-    # --- friendship & forgiveness (69-80) ---
-    ("forgiveness", "two best friends torn apart by a silly misunderstanding"),
-    ("teamwork", "ants who must move a giant crumb before the rain comes"),
-    ("loyalty", "a dog who waits at the station every evening for years"),
-    ("forgiveness", "a brother who must choose between pride and his sister"),
-    ("true friendship", "two friends tested when only one has food left"),
-    ("teamwork", "four village children who cannot lift the log alone"),
-    ("saying sorry", "a girl whose careless words hurt her closest friend"),
-    ("trust", "a boy who must rely on a stranger to guide him home in fog"),
-    ("loyalty", "an old horse the farmer is urged to abandon"),
-    ("second chances", "a thief given work instead of punishment"),
-    ("friendship across differences", "a cat and a mouse who agree to a truce"),
-    ("letting go of anger", "a boy told to hammer a nail for every angry word"),
+    # --- ant aur Uddhav-Gita (71-80) ---
+    ("एक माँ का दुख किसी तर्क से नहीं शांत होता",
+     "गांधारी का श्राप और कान्हा का उसे हँसकर स्वीकार करना"),
+    ("जीत के बाद भी कुछ चीज़ें कभी वापस नहीं आतीं",
+     "युद्ध के बाद कुरुक्षेत्र का सन्नाटा"),
+    ("जो आने वाला है, उसे बचाना सबसे बड़ा धर्म है",
+     "उत्तरा के गर्भ की रक्षा और परीक्षित का जन्म"),
+    ("असली नायक श्रेय नहीं लेता",
+     "युधिष्ठिर का राजतिलक और कान्हा का पीछे खड़ा रहना"),
+    ("सबसे बड़ा शिष्य वो है जो अंत तक सीखता रहे",
+     "उद्धव का कान्हा से अंतिम ज्ञान माँगना"),
+    ("सीखने की इच्छा हो तो पत्थर भी गुरु बन जाता है",
+     "उद्धव गीता और चौबीस गुरुओं की शिक्षा"),
+    ("जो अंदर से टूटा हो, उसे बाहर से कोई नहीं तोड़ता",
+     "यदुवंश का आपसी कलह में नष्ट होना"),
+    ("क्षमा सबसे बड़ी ताक़त है",
+     "प्रभास क्षेत्र, जरा व्याध का बाण, और कान्हा का उसे क्षमा करना"),
+    ("जो बना है वो मिटेगा — पर जो सिखाया है, वो रहेगा",
+     "कान्हा का देह त्याग और द्वारका का जल में समाना"),
+    ("जब भी अन्याय बढ़ेगा, कोई खड़ा होगा",
+     "कान्हा का अंतिम संदेश — मैं हर युग में आऊँगा"),
 ]
 
 # ==========================================================================
 # SPOKEN SIGN-OFFS  (30)
 # ==========================================================================
-# The narrator's closing line. Repeated word-for-word at the end of every
-# episode, a single fixed sign-off is both a mass-production tell and a cue that
-# trains returning viewers to click away.
+# The narrator's closing line. A single fixed sign-off repeated word for word at
+# the end of every episode is both a mass-production tell and a cue that trains
+# returning viewers to click away.
 CTA_CANDIDATES = [
-    "Subscribe for a brand-new story every single day!",
-    "If this story stayed with you, subscribe — there is a new one tomorrow.",
-    "Subscribe and let a gentle story find you every day.",
-    "There is a new story here every day. Come listen tomorrow.",
-    "Stay with us — tomorrow's story is already waiting for you.",
-    "If you enjoyed this one, subscribe and we will tell you another tomorrow.",
-    "Subscribe, and share this story with someone small tonight.",
-    "There are many more stories like this one. Subscribe so you do not miss them.",
-    "Thank you for listening all the way to the end. Subscribe for the next one.",
-    "Subscribe for a new story, and a new lesson, every single time.",
-    "If this one made you think, subscribe — the next may too.",
-    "Come back tomorrow. There is always another story worth hearing.",
-    "Subscribe, and let us keep telling you stories worth remembering.",
-    "That is the end of today's story. Follow along for tomorrow's.",
-    "If you would like another, subscribe and we will begin again tomorrow.",
-    "Subscribe for stories the whole family can listen to together.",
-    "Tell someone this story tonight, and subscribe for the next one.",
-    "Subscribe, and we will meet again in the next story.",
-    "Every story here carries a lesson. Subscribe and collect them all.",
-    "If your children enjoyed this, subscribe — there is a new one waiting.",
-    "Follow along for a gentle story every time you need one.",
-    "Subscribe so tomorrow's story reaches you without you having to look.",
-    "Another story, another lesson, tomorrow. Subscribe and stay with us.",
-    "If this warmed you even a little, subscribe for the next one.",
-    "Subscribe for calm, kind stories with something worth keeping in them.",
-    "There is a story here for every night of the week. Subscribe.",
-    "Thank you for staying till the lesson. Subscribe for the next.",
-    "Subscribe, and let a good story be the last thing you hear today.",
-    "We will be here tomorrow with another one. Follow so you find it.",
-    "Subscribe for stories that are gentle on the ears and good for the heart.",
+    "राधे राधे। ऐसी ही कथाओं के लिए चैनल को Subscribe कीजिए।",
+    "जय श्री कृष्ण। अगली कथा के लिए जुड़े रहिए।",
+    "हरे कृष्ण। रोज़ एक नई कथा के लिए Subscribe कर लीजिए।",
+    "अगर ये कथा दिल को छू गई, तो Subscribe कीजिए — अगली और गहरी है।",
+    "जय कन्हैया लाल की। ऐसी कथाओं के लिए साथ बने रहिए।",
+    "राधे राधे। ये कथा अपने परिवार के साथ भी सुनिए।",
+    "अगर अंत तक सुना, तो एक Subscribe हमारी हिम्मत बढ़ाता है।",
+    "जय श्री कृष्ण। कान्हा की कृपा आप पर बनी रहे।",
+    "हरे कृष्ण। अगली कथा में फिर मिलते हैं।",
+    "राधे राधे। ऐसी कथाएँ छूट न जाएँ, इसलिए Subscribe कीजिए।",
+    "अगर मन को शांति मिली, तो चैनल Subscribe कर लीजिए।",
+    "जय श्री कृष्ण। ये सीख याद रखिए, और आगे भी सुनाइए।",
+    "राधे राधे। कान्हा की और कथाएँ आ रही हैं, जुड़े रहिए।",
+    "जय कन्हैया लाल की। Subscribe करके इस परिवार का हिस्सा बनिए।",
+    "हरे कृष्ण। कथा अच्छी लगी तो किसी अपने को भेज दीजिए।",
+    "राधे राधे। अगली कथा और भी सुंदर है — Subscribe कीजिए।",
+    "जय श्री कृष्ण। रोज़ एक कथा, रोज़ एक सीख।",
+    "अगर आँखें भर आईं, तो समझिए कथा पहुँच गई। Subscribe कीजिए।",
+    "राधे राधे। कान्हा का नाम लेते रहिए।",
+    "जय श्री कृष्ण। इस कथा को अपने बच्चों को भी सुनाइए।",
+    "हरे कृष्ण। कल फिर एक नई कथा के साथ हाज़िर होंगे।",
+    "राधे राधे। ये सीख जीवन में उतारिए, बस इतना ही।",
+    "जय कन्हैया लाल की। Subscribe कीजिए और साथ चलिए।",
+    "अगर कथा पसंद आई तो Like और Subscribe ज़रूर कीजिए।",
+    "जय श्री कृष्ण। कान्हा की कथाएँ कभी खत्म नहीं होतीं।",
+    "राधे राधे। अगली बार एक और अनसुनी कथा लेकर आएँगे।",
+    "हरे कृष्ण। धन्यवाद कि आपने अंत तक सुना।",
+    "जय श्री कृष्ण। ऐसी कथाएँ सुनते रहिए, सुनाते रहिए।",
+    "राधे राधे। कान्हा आपके हर काम में साथ रहें।",
+    "जय कन्हैया लाल की। अगली कथा के लिए घंटी दबा दीजिए।",
 ]
 
 

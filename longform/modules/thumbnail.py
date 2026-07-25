@@ -14,27 +14,35 @@ import os
 import textwrap
 
 from .config import IMAGES_DIR, get_cfg
+from . import textrender
 
 log = logging.getLogger("krishna.thumbnail")
 
 
 def _load_font(size):
+    """Load a Devanagari-capable font at `size`.
+
+    The candidate list this replaced was DejaVu and Arial only. Neither contains
+    a single Devanagari glyph, so the Hindi title on every long-form thumbnail
+    would have rendered as a row of empty boxes - silently, because PIL raises
+    nothing for a missing glyph. Resolution is delegated to textrender so the
+    thumbnail and the on-screen captions can never disagree about which font
+    exists.
+
+    ImageFont.load_default() is deliberately NOT used as a fallback: it is a tiny
+    bitmap Latin font, so it would produce an unreadable thumbnail rather than a
+    clean image with no title.
+    """
     from PIL import ImageFont
 
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-        "/Library/Fonts/Arial Bold.ttf",
-    ]
-    for path in candidates:
-        try:
-            if os.path.exists(path):
-                return ImageFont.truetype(path, size)
-        except Exception:
-            continue
+    path = textrender.find_font()
+    if not path:
+        log.warning("No font available; thumbnail will have no title text.")
+        return None
     try:
-        return ImageFont.load_default()
-    except Exception:
+        return ImageFont.truetype(path, size)
+    except Exception as exc:
+        log.warning("Could not load thumbnail font %s (%s).", path, exc)
         return None
 
 
@@ -81,7 +89,10 @@ def generate_thumbnail(title, hook="", out_path=None):
         # Title (big, gold).
         title = (title or "A Moral Story").strip()
         font_big = _load_font(96)
-        wrapped = textwrap.fill(title.upper(), width=16)
+        # No .upper(): Devanagari has no letter case. width lowered 16 -> 13
+        # because Devanagari clusters are wider on screen than Latin
+        # characters, and 16 overflowed the thumbnail at this font size.
+        wrapped = textwrap.fill(title, width=13)
         gold = (255, 213, 74)
         # Draw with a simple black outline for readability.
         y = 140
@@ -94,7 +105,7 @@ def generate_thumbnail(title, hook="", out_path=None):
             y += th + 18
 
         # Small channel tag at the bottom.
-        channel = get_cfg("channel.name", "Krishna Universe").upper()
+        channel = get_cfg("channel.name", "Krishna Universe")
         font_small = _load_font(44)
         tw, th = _text_size(draw, channel, font_small)
         draw.text(((W - tw) // 2, H - 90), channel, font=font_small, fill=(255, 255, 255))

@@ -1,267 +1,161 @@
-# Sweet Soul Stories — monetisation reality check & action plan
+# Krishna Universe — monetisation plan
 
-Channel snapshot used for this plan: **399 subscribers, 113 videos, ~125,000 lifetime
-views, roughly 5 weeks old, Shorts landing at 275–941 views each.**
-
----
-
-## 1. The honest math on "monetise in 15 days"
-
-There are two ways into the YouTube Partner Program, and a lower fan-funding tier.
-
-| Gate | Requirement | Where the channel is | Verdict for 15 days |
-|---|---|---|---|
-| **Fan funding tier** | 500 subs + 3 public uploads in 90 days + (3,000 watch hours in 12 mo **OR** 3M Shorts views in 90 days) | 399 subs, uploads fine | **Subs part is reachable.** The hours/views part is not. |
-| **Full ads — Shorts route** | 1,000 subs + **10,000,000** valid public Shorts views in 90 days | ~125K lifetime views | **Not possible.** Needs ~111,000 views/day; currently ~3,600/day — a 31× jump. |
-| **Full ads — long-form route** | 1,000 subs + **4,000** valid public watch hours in 12 months | Long-form posts every other day | **Not possible in 15 days**, but this is the only realistic route overall. |
-
-Why long-form is the realistic route: watch hours come from **duration**, not view count.
-4,000 hours = 240,000 minutes. A 6-minute story watched ~40% of the way through banks
-about 2.4 minutes per view, so roughly **100,000 long-form views** clears the gate — versus
-**10 million** Shorts views. Same milestone, two orders of magnitude apart in difficulty.
-
-Subscriber math: 399 subs in ~35 days is about 11/day. Reaching 1,000 in 15 days needs
-about 40/day. Reaching **500** needs about 7/day, which is comfortably achievable.
-
-**So: 15 days to full monetisation is not achievable at this scale.** What 15 days *can*
-deliver is: cross 500 subs, remove the policy rejection risk described below, and get the
-long-form engine producing enough volume that the 4,000-hour gate becomes a matter of
-months instead of never.
+This channel is starting from zero. That is genuinely better than starting from a
+library with a template fingerprint, because the constraint that matters most is
+decided before the first upload, not after a hundred of them.
 
 ---
 
-## 2. The bigger risk nobody was tracking: policy, not SEO
+## 1. The honest math
 
-YouTube renamed its "repetitious content" policy to **"inauthentic content"** in July 2025
-and expanded it in July 2026. The first of the three named categories is
-*generic, repetitive, or template-based content*, and it is **ineligible for monetisation**.
-([YouTube channel monetisation policies](https://support.google.com/youtube/answer/1311392),
-[TechCrunch on the July 2026 clarification](https://techcrunch.com/2026/07/20/youtube-clarifies-policies-around-ai-slop-and-upsetting-videos/))
+Two routes into the YouTube Partner Program, plus a lower fan-funding tier.
 
-Before this change, every one of the 113 uploads shipped with:
-
-- the identical title suffix `| Cute & Wholesome #shorts #cute`
-- the identical 8-hashtag block
-- the identical two-sentence description tail
-- the identical spoken sign-off, in the same synthetic voice
-- a description that was a verbatim copy of the video's own narration
-
-That is a machine-detectable template fingerprint across an entire channel. Even if the
-subscriber and watch-hour gates were met, that is the pattern a YPP reviewer rejects. So
-the work in this change set is not only about getting more views — it is about being
-*approvable* when the numbers do arrive.
-
-*Content in this section was rephrased from the linked sources for licensing compliance.*
-
----
-
-## 3. What changed in the code
-
-### New: per-video SEO engine
-- **`modules/seo.py`** — subject detection (puppy / kitten / baby / pair buckets) drives a
-  search anchor, 20 rotating title patterns, 4 rotating hashtag pools, a unique description
-  body, and a tag set built to fit YouTube's 500-character budget.
-- **`longform/modules/seo.py`** — the same idea for long-form, plus **auto-generated
-  chapters** with real timestamps derived from the narration length.
-
-### Nothing repeats until a pool is exhausted
-Selection used to be `random.choice`, which puts the item straight back in the bag — so even
-a large pool collides within days. Pools moved into `modules/pools.py` and grew:
-
-| Pool | Before | After | Lasts (at 5 reels/day) |
-|---|---|---|---|
-| Story topics | 46 | **150** | 30 days |
-| Spoken hooks | 58 | **120** | 24 days |
-| Screen hooks | 24 | **80** | 16 days |
-| Flash phrases | — | **152** | 10 days (3 per reel) |
-| Sign-offs | 8 | **45** | 9 days |
-| Title patterns | 20 | **40** | 8 days |
-| Pinned comments | 8 | **29** | 6 days |
-| Long-form topic seeds | 20 | **80** | 27 weeks (3/week) |
-
-`modules/history.py` then draws **without replacement** and remembers across runs via
-`history.json`, which both workflows commit back. Verified over a simulated 30 days of
-5 reels/day: every pool is fully exhausted before a single item returns.
-
-### Rolling captions off, word flash in
-The word-by-word subtitle track is off — it covered the animal. Instead, three 2-3 word
-phrases appear for ~1.3s each in the upper third, with no backdrop panel, so a muted viewer
-still has something to read while the subject stays clear.
-
-### Two buttons in the Actions tab (no terminal needed)
-- **Fix Old Video Titles** — rewrites the back catalogue. Defaults to `dry-run`, and
-  protects the 15 best-performing videos so nothing that is currently earning views gets
-  re-indexed.
-- **Slot Report** — read-only; prints median views per publish hour.
-
-Both need a one-time token; `TOKEN_SETUP.md` covers it entirely in the browser.
-
-### Long-form retargeted to 3-5 minutes
-The composer never cuts a video to `max_duration_seconds` — it always matches the voiceover
-length — so changing the duration config alone does nothing. Length is actually controlled by
-**word count**: the storyteller voice runs ~145 words/minute, so `story.target_words` went
-800 → **560** (~3.9 min) with a 440-700 word band. If a model returns something longer, the
-next model is tried; if all of them overshoot, the shortest is trimmed at a sentence boundary
-with the moral and sign-off re-appended.
-
-### Upload schedule rebuilt around US prime time
-Only 1 of the 5 old slots actually published inside a US prime window; three landed in the
-middle of the American working day (11:23 AM, 2:09 PM, 5:51 PM ET). Now:
-
-| Window | Slots | cron (UTC) | Publish (EDT / EST) |
-|---|---|---|---|
-| Morning scroll | 1 reel | `37 10` | 7:57 AM / 6:57 AM |
-| After school | 1 reel | `53 18` | 4:13 PM / 3:13 PM |
-| Evening prime | reel, Sun/Tue/Thu/Sat | `47 22` | 8:07 PM / 7:07 PM |
-| Evening prime | reel, daily | `33 1` | 10:53 PM / 9:53 PM |
-| Evening prime | reel, daily | `57 3` | 1:17 AM / 12:17 AM |
-| Evening prime | long-form, Mon/Wed/Fri | `41 22` | 8:39 PM / 7:39 PM |
-
-Both DST states were checked, so the crons never need a seasonal edit. Long-form also moved
-from `*/2` day-of-month to Mon/Wed/Fri: `*/2` resets at month boundaries, so the 31st and the
-1st both matched and it ran on two consecutive days several times a year.
-
-**The queue delay is ~80 minutes, not 30.** Every cron is set that far ahead of its intended
-publish time. The figure is measured, not assumed — five consecutive scheduled runs on this
-repo started +83, +88, +64, +79 and +78 minutes after their cron, averaging **+78**. The
-render itself is quick (those runs finished in 4-6 minutes), so nearly all of it is queue
-time. Re-check with `python slot_report.py --shorts-only`, which reads the real publish hour
-off YouTube, and do not shorten the lead without re-measuring.
-
-**Scheduled runs are occasionally dropped altogether.** Run #160 failed with *"The job was not
-acquired by Runner of type hosted even after multiple attempts"* alongside a GitHub internal
-server error — no runner was ever assigned, so no code in this repo could have prevented it.
-It costs one reel and needs no fix. Minute values avoid `:00` and `:30`, when the scheduler is
-most congested.
-- Metadata is now built **once at generate time** and stored in `manifest.json`. The
-  uploader consumes it instead of stamping a fixed suffix on top.
-
-### Retention fixes (why views were 275–941)
-| Setting | Before | After | Reason |
-|---|---|---|---|
-| `captions.enabled` | `false` | `true` | A large share of Shorts plays start muted. With captions off, those viewers got no text at all. |
-| `hook.enabled` | `false` | `true`, 2.5s | There was no scroll-stopper in the first frame. Now driven by short 2–4 word `SCREEN_HOOKS`, not the long spoken sentence that was unreadable at 150px. |
-| `target_duration_seconds` | 30 | 24 | Shorts distribution leans on view-duration-as-a-percentage and on loops. |
-| `clip_cut_seconds` | 2.5 | 1.8 | Faster visual changes reduce mid-video swipe-away. |
-| `tts.voice` | 1 fixed voice | pool of 6 + rate variation | 113 videos in one identical synthetic voice reads as mass-produced. |
-| Pexels keywords | 10 (incl. breed-specific) | 18 generic | The old list kept pulling the same handful of stock clips. |
-
-### Content diversity
-- Spoken hooks: 30 → **58**
-- Story topics: 20 → **46**
-- New: 24 short on-screen hooks; 8 rotating spoken sign-offs (was 1 fixed line)
-- Long-form: rotating sign-offs, and `channel.name` corrected from **"Krishna Universe"** to
-  **"Sweet Soul Stories"** — the long-form pipeline uploads to the *same* channel with the
-  *same* token, so descriptions were welcoming viewers to a brand that does not exist there.
-
-### New tools
-- **`seo_report.py`** — verifies uniqueness and API limits with no keys needed.
-  `python seo_report.py -n 40` → currently **604 checks passing**, 100% distinct titles,
-  descriptions and hashtag sets.
-- **`retitle_existing.py`** — rewrites the metadata of the **113 already-published videos**.
-  Dry run by default. Fixing the generator only fixes future uploads; this fixes the back
-  catalogue, which is what a reviewer actually inspects.
-- **`modules/thumbnail.py`** — Shorts thumbnails for the channel grid / subscriptions feed /
-  search. These are the surfaces where a viewer decides to subscribe, and the channel was
-  letting YouTube pick an arbitrary (often blurry) frame.
-
----
-
-## 4. Your 15-day checklist — the parts only you can do
-
-### Day 1 — clean up the back catalogue (all in the browser)
-1. Follow **`TOKEN_SETUP.md`** once to create the `YT_MANAGE_TOKEN_JSON` secret.
-2. Actions → **Slot Report** → Run workflow. Read-only, so it proves the token works.
-3. Actions → **Fix Old Video Titles** → Run workflow with `mode = dry-run`. Read the
-   before/after pairs.
-4. Same button with `mode = apply`. Start with `limit = 5`, wait 48 hours, check Studio, then
-   move to 20/day.
-
-Roughly 20/day for six days covers all 113. Keep batches small: `videos.update` costs 50 API
-units and the daily uploads already spend ~8,250 of the 10,000 allowance.
-
-The 15 best-performing videos are protected by default (`skip_top`). Rewriting a video that
-is currently earning views makes YouTube re-index it and reach can dip for a few days —
-there is nothing to lose on one sitting at 275 views, but there is on the ones carrying the
-channel.
-
-### Day 1 — check the setting that decides whether any of this pays
-**Confirm the channel is not classified "Made for Kids."** Studio → Settings → Channel →
-Advanced, and the Audience setting on individual videos. If YouTube treats this content as
-made-for-kids, **comments are disabled entirely** and personalised ads are switched off, which
-roughly halves RPM. Given the niche (babies, toddlers, kids' moral stories) this channel sits
-right on the boundary, so verify it rather than assume. This matters more than any SEO change.
-
-Also confirm **2-step verification** is on — custom thumbnails require it.
-
-### Upload volume: what the real ceiling is
-The repo is public, so GitHub Actions minutes are unlimited and no longer a constraint. The
-binding limit is now the **YouTube Data API quota: 10,000 units/day**, and `videos.insert`
-costs **1,600 units** — a hard ceiling of **6 uploads/day**. The quota resets at midnight
-**Pacific** (07:00 UTC), not at UTC midnight.
-
-Current allocation keeps every day at 8,250 units, leaving headroom for one retry:
-
-| Days | Uploads | Units |
+| Gate | Requirement | Realistic timeline here |
 |---|---|---|
-| Sun / Tue / Thu / Sat | 5 reels | 8,250 |
-| Mon / Wed / Fri | 4 reels + 1 long-form | 8,250 |
+| **Fan funding tier** | 500 subs + 3 public uploads in 90 days + (3,000 watch hours in 12 mo **OR** 3M Shorts views in 90 days) | Subs are the easy half. The hours half comes from long-form. |
+| **Full ads — Shorts route** | 1,000 subs + **10,000,000** valid public Shorts views in 90 days | Needs ~111,000 Shorts views **per day** for 90 days straight. Not the route. |
+| **Full ads — long-form route** | 1,000 subs + **4,000 watch hours** in 12 months | **This is the route.** ~92,000 views on 6-minute kathas at 40% retention. |
 
-That is **32 reels + 3 long-form per week**. To go beyond it, request a quota increase in
-Google Cloud Console (free form, takes a while and may be refused).
+Availability of the lower tier varies by country — check
+**Studio → Earn** to see what your account is actually offered.
 
-### Every day — 10 minutes of manual work that the API cannot do
-- **Pin the first comment.** The generator now prints one for each video
-  (`PIN THIS COMMENT on https://youtu.be/...` in the workflow log). Comment velocity in the
-  first hour is a strong distribution signal, and posting comments needs a scope the upload
-  token does not have.
-- **Reply to every comment** for the first hour after each upload.
-- **Check Studio → Content → Shorts**, sort by views, and note which *screen hook* and which
-  *subject* (puppy / kitten / baby) the winners used. Feed that back by weighting those pools.
+### Why long-form, stated plainly
 
-### Week 1 — verify you are actually eligible
-- Studio → **Earn** — confirm which tier is offered in your country. The 500-sub fan-funding
-  tier rolled out region by region, so check rather than assume.
+A 6-minute katha watched to 40% yields 2.4 minutes per view. 4,000 hours =
+240,000 minutes = about **92,000 views**. The Shorts route asks for **10 million**
+views for the same milestone.
 
-### Week 2 — decide the schedule on data, not on a hunch
+That is a 100× difference in required traffic. Shorts are for finding subscribers;
+long-form is the only thing that produces the metric that unlocks ads.
+
+**Realistic full monetisation: 4-8 months**, driven by long-form, if the kathas
+hold retention. Anyone promising 15 days is not doing the arithmetic.
+
+---
+
+## 2. What the schedule is doing
+
+All times are **IST publish times**, not cron times. The crons sit ~80 minutes
+earlier because GitHub's Actions scheduler queues jobs — measured at +78 minutes
+average across five consecutive runs, not guessed.
+
+| Slot | Publish IST | Days |
+|---|---|---|
+| Morning puja | 07:15 | daily |
+| Lunch | 13:30 | daily |
+| Sandhya aarti | 19:15 | Sun/Tue/Thu/Sat |
+| Night peak | 21:15 | daily |
+| Late night | 22:45 | daily |
+| **Long-form katha** | **20:30** | Mon/Wed/Fri |
+
+Weekly: **32 reels + 3 kathas.**
+
+Two windows matter for devotional content in India, and both are covered: the
+morning puja hour, and the long evening stretch from aarti through late night.
+IST has no daylight saving, so these crons never need a seasonal correction.
+
+### The ceiling is the API quota, not GitHub
+
+Actions minutes are unlimited on a public repo. The real limit is the YouTube
+Data API: **10,000 units/day**, and `videos.insert` costs **1,600** — a hard
+ceiling of **6 uploads/day**.
+
+The quota day resets at **midnight Pacific (07:00 UTC)**, not UTC midnight. This
+is easy to get wrong: the 07:15 and 13:30 IST slots run before 07:00 UTC, so they
+belong to the *previous* quota day. Accounting for that:
+
+- Normal day: 5 reels = 8,250 units
+- Long-form day: 4 reels + 1 katha = 8,250 units (the 19:15 slot is skipped)
+
+Both leave room for one retry. `python check_workflows.py` verifies this
+arithmetic rather than trusting the comment.
+
+Want more than 6 uploads/day? Request a quota increase in Google Cloud Console.
+It is free but can take weeks and can be refused.
+
+---
+
+## 3. First two weeks
+
+**Before enabling the schedule**
+
+1. Set all four secrets (see README). `POLLINATIONS_TOKEN` is not optional — the
+   generated images *are* the video.
+2. Put the real channel handle in `config.json` → `channel.url` and
+   `seo.channel_url`.
+3. Run **Actions → Krishna Universe Auto Reel → Run workflow → `selftest: true`**.
+   Download the artifact. Confirm the Hindi text renders as Hindi, not as empty
+   boxes. This is the one thing that cannot be verified from code.
+4. Confirm the channel is **NOT** marked "Made for Kids" in
+   **Studio → Settings → Channel → Advanced**. If it is, comments are disabled
+   entirely — which kills the pinned-comment plan — and personalised ads are off,
+   roughly halving RPM. Devotional kids-adjacent content sits right on this line.
+
+**Daily, 30 seconds of work**
+
+Paste and pin the suggested comment. `generate.py` prints it in the Actions log:
+
+```
+PIN THIS COMMENT on https://youtu.be/xxxx -> कमेंट में जय श्री कृष्ण लिखिए 🙏
+```
+
+This cannot be automated: the upload token only carries the `youtube.upload`
+scope, and there is **no YouTube API to pin a comment at all**. Comment velocity
+in the first hour is a strong distribution signal, and devotional audiences reply
+to a direct ask more reliably than most niches.
+
+**After 2 weeks**
+
 ```bash
 python slot_report.py --shorts-only --detail
 ```
-This groups every published video by the hour it went live in US Eastern and reports the
-**median** views per slot. Read the median, not the mean — one lucky video makes a dead slot
-look healthy. A slot needs ~8-10 videos before its number means anything, so give it two weeks.
 
-The morning slot in particular is a deliberate re-test: a morning slot was removed earlier for
-"almost no views", but that was measured when every video had an identical title and no
-on-screen text, so the slot itself was never fairly tested.
+This reads the **real** publish hour off YouTube and groups views by slot. Two
+things to use it for:
 
-### Things to stop doing
-- Don't add more hashtags. Above 15, YouTube ignores **all** of them. The engine ships 9.
-- Don't chase the Shorts monetisation route as the *goal*. Reels are for subscribers and
-  reach; the 10M-views-in-90-days gate stays out of range. Watch hours come from long-form.
-- Don't set cron times to the publish time you want. Actions queues jobs 5-30 minutes late and
-  rendering adds ~10-15 more, so the crons are deliberately set ~40 minutes early.
+1. Cut or move the weakest slot — with data, not by eye.
+2. Correct the 80-minute cron lead. It came from five samples on a different
+   repo; GitHub's queue delay varies by time of day, so the real figure for these
+   specific hours will differ.
+
+Read the **median**, not the mean. One lucky video drags a mean anywhere.
 
 ---
 
-## 5. Realistic timeline
+## 4. Where reach actually comes from
 
-| Milestone | Realistic ETA | Depends on |
-|---|---|---|
-| 500 subscribers | **10–20 days** | back catalogue retitled, thumbnails live, hooks on screen |
-| 3,000 watch hours (fan funding) | 2–4 months | daily long-form, decent audience retention |
-| 1,000 subscribers | 1.5–3 months | one or two Shorts breaking out |
-| 4,000 watch hours (full ads) | **4–7 months** | 2 long-form/day at improved retention |
+Ranked by how much they move the number, most first:
 
-Anyone promising 15 days is selling something. The version of this that works is: fix the
-template problem now so you are *approvable*, and put the volume into long-form so the
-watch-hour clock actually moves.
+1. **The first 2 seconds.** The screen hook (2-4 Hindi words) and the opening
+   frame. Everything else is downstream of the swipe decision.
+2. **Retention through the middle.** Cuts every ~1.6-2.6s, a different camera
+   move per scene, real footage mixed in, and flash text for muted viewers.
+3. **The thumbnail** — not for the Shorts player, but for the channel grid, the
+   subscriptions feed and search. Those are the surfaces where someone who liked
+   one video decides to subscribe.
+4. **Title + first description line.** Only the opening ~100 characters show in
+   search, which is why the first line carries a real Hindi search anchor.
+5. **Hashtags.** Real, but the smallest of these five. Capped at 14 — above 15
+   YouTube ignores every one of them.
+
+Note the order. Hashtags are last. Adding thirty of them does not beat fixing the
+first two seconds, and stuffing irrelevant "viral" tags actively hurts by sending
+the video to an audience that swipes.
 
 ---
 
-## 6. Suggested next build (not in this change set)
+## 5. What is deliberately not built
 
-An **analytics feedback loop**: pull per-video CTR, average view duration and subscribers-gained
-from the YouTube Analytics API, then weight the hook / topic / subject pools toward what is
-measurably winning. Right now every pool is drawn from uniformly at random, so the pipeline has
-no way to learn from its own results. That is the single biggest remaining gap.
+**No analytics feedback loop.** Every pool is drawn uniformly at random (without
+replacement). The pipeline cannot yet learn which hooks or leelas actually won.
+
+The next meaningful upgrade is to pull per-video retention and CTR from the
+YouTube Analytics API and weight the pools toward what performs. That needs a
+read-only Analytics scope and about two weeks of data first — weighting on a
+handful of videos would just amplify noise.
+
+**No paid AI video.** The visuals are generated stills with a motion engine plus
+real atmosphere footage. True text-to-video (Veo, Kling) would look better and
+costs roughly $5-15 per 30-second Short — $750-2,000/month at 5/day, before any
+revenue exists. A sensible upgrade path once monetised: spend it on the first
+3 seconds only, where the swipe decision happens.

@@ -57,7 +57,7 @@ indefinitely. This is the single most common reason these setups break.
    https://www.googleapis.com/auth/youtube.force-ssl
    ```
 7. Click **Authorize APIs**
-8. Sign in with **the Google account that owns the Sweet Soul Stories channel** —
+8. Sign in with **the Google account that owns the Krishna Universe channel** —
    not any other account — and click through the permission screens
 9. Back in the Playground, click **Exchange authorization code for tokens**
 10. On the right you will now see a JSON response. Copy the value of
