@@ -1,0 +1,149 @@
+{
+  "_comment": "EMERGENCY FALLBACK ONLY. Used when GEMINI_API_KEY is missing or every model candidate fails. Kept deliberately small: relying on these means the same dozen kathas cycle, which is the repetition the history layer exists to prevent. If you see these titles in the manifest, the Gemini key needs checking. scene_prompts are English on purpose - they go to the image model, not to the viewer.",
+  "scripts": [
+    {
+      "title": "माखन चोर की सीख",
+      "lesson": "जो मिले उसे बाँटना ही उसे सच में पाना है",
+      "text": "कृष्ण ने ये किया था, और आज भी हम वही गलती करते हैं। गोकुल में कान्हा माखन चुराते थे, पर एक बात कोई नहीं देखता। वो माखन अकेले कभी नहीं खाते थे। हर सखा के हिस्से में बराबर बाँट देते थे। यशोदा ने एक दिन पूछा, तो बोले, अकेले खाया हुआ स्वाद नहीं देता। जो मिले उसे बाँटना ही उसे सच में पाना है। राधे राधे। ऐसी ही कथाओं के लिए चैनल फॉलो करो।",
+      "keywords": ["clay pot village india", "butter churning traditional", "indian cows village"],
+      "scene_prompts": [
+        "baby Krishna with peacock feather crown reaching into a clay butter pot inside an ancient Indian village hut, warm lamplight",
+        "young Krishna sharing butter with a circle of village cowherd boys sitting on a mud floor, golden light",
+        "mother Yashoda kneeling and gently questioning young Krishna in a village courtyard, soft morning light",
+        "wide shot of an ancient Gokul village at sunrise with cows and mud houses, mist"
+      ]
+    },
+    {
+      "title": "दो अंगुल छोटी रस्सी",
+      "lesson": "भगवान ताकत से नहीं, प्रेम से बँधते हैं",
+      "text": "एक रस्सी, और भगवान भी छोटे पड़ गए। यशोदा ने कान्हा को बाँधने की कोशिश की, पर हर रस्सी दो अंगुल छोटी पड़ जाती। घर की सारी रस्सियाँ जोड़ दीं, फिर भी कम। थककर माँ की आँखें भर आईं। उसी पल कान्हा खुद बँध गए। बल से नहीं बँधे थे, माँ के आँसुओं से बँधे। भगवान ताकत से नहीं, प्रेम से बँधते हैं। जय श्री कृष्ण। अगली कथा के लिए जुड़े रहो।",
+      "keywords": ["clay pot village india", "oil lamp diya flame", "village mud house"],
+      "scene_prompts": [
+        "mother Yashoda holding a rope trying to tie young Krishna beside a wooden pillar in a village hut, warm lamplight",
+        "close up of many ropes knotted together lying on a mud floor, dramatic lamp light",
+        "Yashoda with tears in her eyes looking at young Krishna, emotional golden light",
+        "young Krishna standing quietly tied to a wooden mortar, soft glow around him"
+      ]
+    },
+    {
+      "title": "गोवर्धन का छत्र",
+      "lesson": "सच्चा नेता सिर पर बोझ लेता है",
+      "text": "यहाँ सबसे बड़ी ताकत ने घुटने टेक दिए। कृष्ण ने इंद्र की पूजा रुकवाकर गोवर्धन की पूजा करवाई, क्योंकि गोकुल का पेट वही पर्वत भरता था। इंद्र क्रोध में सात दिन बरसे। कृष्ण ने गोवर्धन को उठाकर छत्र बना दिया और पूरा गाँव नीचे सुरक्षित रहा। सातवें दिन इंद्र ने आकर क्षमा माँगी। सच्चा नेता सिर पर बोझ लेता है, कंधों पर नहीं डालता। हरे कृष्ण। कल फिर एक नई सीख।",
+      "keywords": ["heavy monsoon rain", "storm clouds dark sky", "green mountain hill"],
+      "scene_prompts": [
+        "young Krishna lifting an entire green mountain on one finger above a village during heavy rain, epic cinematic",
+        "villagers and cows sheltering under a huge floating mountain, dramatic rain light",
+        "angry storm god Indra in dark thunder clouds above a valley, lightning",
+        "Indra bowing before young Krishna under a clearing sky, golden rays"
+      ]
+    },
+    {
+      "title": "सुदामा की पोटली",
+      "lesson": "प्रेम से दिया थोड़ा भी बहुत होता है",
+      "text": "जिसके पास कुछ नहीं था, उसने सब दे दिया। सुदामा फटे कपड़ों में द्वारका पहुँचे, हाथ में बस मुट्ठी भर चावल की पोटली। द्वारपाल ने रोका, पर कृष्ण दौड़कर द्वार तक आए और मित्र को सिंहासन पर बैठाया। वो चावल कृष्ण ने ऐसे खाए जैसे अमृत हो। सुदामा ने कुछ माँगा नहीं, फिर भी सब मिला। प्रेम से दिया थोड़ा भी बहुत होता है। कमेंट में लिखो, राधे राधे।",
+      "keywords": ["rice grains closeup", "poor village hut", "golden palace architecture"],
+      "scene_prompts": [
+        "a poor thin brahmin in torn clothes walking a dusty road towards a golden city, evening light",
+        "Krishna in royal dress running down palace steps to embrace his poor friend, warm light",
+        "close up of a small cloth bundle of rice grains held in trembling old hands",
+        "the poor friend seated on a royal throne while Krishna sits beside him smiling, golden hall"
+      ]
+    },
+    {
+      "title": "कालिया और यमुना",
+      "lesson": "सज़ा का मतलब मिटा देना नहीं, सुधार देना है",
+      "text": "जिस डर से सब भागे, कृष्ण उसी में कूद पड़े। कालिया नाग ने यमुना का जल विषैला कर दिया था, कोई किनारे तक नहीं जाता था। कान्हा ने छलाँग लगाई और नाग से भिड़ गए। जीतने के बाद उन्होंने कालिया को मारा नहीं, बस समुद्र की ओर भेज दिया। सज़ा का मतलब मिटा देना नहीं, सुधार देना है। इसे सेव कर लो, कभी काम आएगा।",
+      "keywords": ["yamuna river flowing water", "forest sunlight rays", "still water reflection"],
+      "scene_prompts": [
+        "dark poisoned river with a huge serpent coiled beneath the surface, ominous green light",
+        "young Krishna leaping from a tree branch into a dark river, dramatic splash",
+        "young Krishna standing calmly on the head of a giant multi hooded serpent in a river",
+        "clear blue river water flowing again at sunrise with villagers watching from the bank"
+      ]
+    },
+    {
+      "title": "द्रौपदी की पुकार",
+      "lesson": "सच्ची पुकार कभी खाली नहीं जाती",
+      "text": "यहाँ चुप रहना भी गुनाह बन गया था। भरी सभा में द्रौपदी का चीर खींचा जा रहा था और बड़े बड़े योद्धा सिर झुकाए बैठे रहे। जब हर हाथ छूट गया, तब उसने आँखें बंद कर कृष्ण को पुकारा। साड़ी अनंत हो गई। अन्याय के समय चुप रहना भी अन्याय में शामिल होना है, और सच्ची पुकार कभी खाली नहीं जाती। हाथ जोड़कर विदा। कल एक नई कथा।",
+      "keywords": ["old palace pillars", "brass temple bell", "candle flame dark background"],
+      "scene_prompts": [
+        "a grand ancient Indian royal court hall full of silent seated warriors, dim torch light",
+        "a woman in a red saree standing alone in the centre of a royal court with folded hands, dramatic light",
+        "endless flowing saree fabric swirling upward like light in a dark hall, divine glow",
+        "silhouette of Krishna with a soft golden aura in the darkness of the hall"
+      ]
+    },
+    {
+      "title": "पाँच गाँव की माँग",
+      "lesson": "लालच थोड़े से भी संतुष्ट नहीं होता",
+      "text": "कृष्ण ने पाँच गाँव माँगे थे, बस पाँच। युद्ध टालने के लिए वो खुद शांति दूत बनकर हस्तिनापुर गए। पूरे राज्य की जगह सिर्फ पाँच गाँव मांगे, ताकि खून न बहे। दुर्योधन ने सुई की नोक भर ज़मीन भी देने से मना कर दिया। लालच थोड़े से भी संतुष्ट नहीं होता, और वही अहंकार पूरा कुल ले डूबा। बोलो, जय श्री राधे।",
+      "keywords": ["old palace pillars", "dry desert field dust", "eagle flying sky"],
+      "scene_prompts": [
+        "Krishna as a peace envoy standing in a vast royal court addressing a proud king, torch light",
+        "a proud crowned king seated on a throne refusing with a raised hand, dark dramatic light",
+        "wide shot of five small peaceful villages in a green valley at sunrise",
+        "an empty dusty battlefield plain at dusk with dark clouds gathering"
+      ]
+    },
+    {
+      "title": "गीता का सबसे बड़ा सूत्र",
+      "lesson": "नतीजे की चिंता छोड़ो, काम पर ध्यान दो",
+      "text": "इस एक सवाल का जवाब पूरी गीता है। युद्ध के मैदान में अर्जुन के हाथ से धनुष छूट गया। उसने पूछा, अपनों से कैसे लड़ूँ। कृष्ण ने कहा, तुम्हारा काम कर्म है, फल का हिसाब मेरा। जो होना है वो होगा, पर अपना कर्तव्य छोड़ना कायरता है। नतीजे की चिंता छोड़ो और काम पर ध्यान दो। जय कन्हैया लाल की। कल फिर मिलेंगे।",
+      "keywords": ["sunrise over horizon", "dust storm wind", "open sky clouds"],
+      "scene_prompts": [
+        "a warrior dropping his bow in a chariot on a vast battlefield at dawn, dust in the air",
+        "Krishna as charioteer turning to speak calmly to the seated warrior, golden morning light",
+        "close up of a bow lying in the dust of a battlefield",
+        "the warrior standing tall and raising his bow again as the sun rises behind him"
+      ]
+    },
+    {
+      "title": "बर्बरीक का शीश दान",
+      "lesson": "सबसे बड़ा त्याग वो है जो चुपचाप किया जाए",
+      "text": "कृष्ण ने वो माँगा जो कोई सोच भी नहीं सकता था। बर्बरीक के पास ऐसे बाण थे कि वो अकेला पूरा युद्ध पल में खत्म कर सकता था। कृष्ण ब्राह्मण वेश में आए और दान माँगा, उसका शीश। बर्बरीक एक पल भी नहीं झिझका। सबसे बड़ा त्याग वो होता है जो चुपचाप कर दिया जाए, बिना नाम की चाह। इस सीख को अपने घर में ज़रूर बताओ।",
+      "keywords": ["dry desert field dust", "sunset sky dramatic", "candle flame dark background"],
+      "scene_prompts": [
+        "a young warrior with three glowing arrows standing on a hill at sunset, epic",
+        "Krishna disguised as a simple brahmin asking for alms on a dusty plain",
+        "the young warrior kneeling with folded hands offering himself, dramatic red sunset",
+        "a lone hilltop shrine glowing at dusk with a distant battlefield below"
+      ]
+    },
+    {
+      "title": "क्षमा करने वाला कृष्ण",
+      "lesson": "क्षमा सबसे बड़ी ताकत है, कमज़ोरी नहीं",
+      "text": "एक शिकारी का बाण, और कृष्ण की मुस्कान। प्रभास में पीपल के नीचे विश्राम करते कृष्ण के पैर में एक शिकारी का बाण लग गया। शिकारी काँपते हुए क्षमा माँगने आया। कृष्ण ने कहा, तुम्हारा दोष नहीं, यही समय था। उन्होंने उसे आशीर्वाद देकर विदा किया। क्षमा सबसे बड़ी ताकत है, कमज़ोरी नहीं। कृष्ण कृपा बनी रहे। राधे राधे।",
+      "keywords": ["peepal tree leaves", "sunset river silhouette", "still water reflection"],
+      "scene_prompts": [
+        "Krishna resting peacefully under a large peepal tree at golden hour",
+        "a frightened hunter kneeling with folded hands and a bow lying beside him",
+        "close up of Krishna's calm smiling face with soft evening light",
+        "wide silhouette of a peepal tree beside a still river at sunset"
+      ]
+    },
+    {
+      "title": "बाँसुरी खाली क्यों है",
+      "lesson": "अहंकार खाली करो, तभी सुर निकलेगा",
+      "text": "कृष्ण ने अपनी बाँसुरी की सच्चाई खुद बता दी थी। एक ग्वाले ने पूछा, इतनी साधारण लकड़ी से इतना मीठा सुर कैसे निकलता है। कान्हा हँसे और बोले, क्योंकि वो अंदर से बिल्कुल खाली है। जो खुद से भरा हो, उसमें से कोई सुर नहीं निकलता। अहंकार खाली करो, तभी सुर निकलेगा। मुरली की धुन जैसी कथाएँ, रोज़ यहाँ।",
+      "keywords": ["bamboo flute closeup", "peacock feathers close up", "green forest trees"],
+      "scene_prompts": [
+        "close up of a bamboo flute held in decorated hands, warm light",
+        "young Krishna sitting on a rock playing the flute while peacocks listen, forest light",
+        "a village cowherd boy listening in wonder under a banyan tree",
+        "sunbeams through forest leaves over a quiet river bank"
+      ]
+    },
+    {
+      "title": "अंधेरे में एक दीया",
+      "lesson": "शिकायत करने से अच्छा है एक दीया जला देना",
+      "text": "सुनो, ये सीख आज तुम्हारे काम आएगी। कृष्ण ने कहा था, अंधेरे को गाली देने से अंधेरा नहीं जाता। शिकायत करना सबसे आसान काम है, हर कोई कर लेता है। पर एक छोटा दीया जला देना पूरे कमरे का हिसाब बदल देता है। तुम्हारा काम अंधेरा गिनना नहीं, एक दीया जलाना है। रोज़ एक सीख, रोज़ एक कथा। जुड़े रहो।",
+      "keywords": ["oil lamp diya flame", "incense smoke temple", "candle flame dark background"],
+      "scene_prompts": [
+        "a single clay oil lamp burning in a completely dark stone temple, dramatic light",
+        "hands lighting a small diya with a thin flame, warm glow in darkness",
+        "many diyas glowing along temple steps at night, reflections in water",
+        "Krishna's silhouette with a soft golden aura beside a single burning lamp"
+      ]
+    }
+  ]
+}

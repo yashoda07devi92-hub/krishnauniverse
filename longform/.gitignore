@@ -1,0 +1,11 @@
+output/
+assets/clips/
+assets/images/
+assets/cache/
+assets/music/*.mp3
+manifest.json
+yt_token.json
+yt_client_secret.json
+.env
+__pycache__/
+*.pyc
