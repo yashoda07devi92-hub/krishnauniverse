@@ -198,17 +198,43 @@ jobs:
         if: ${{ github.event.inputs.diagnose_only != 'true' }}
         run: |
           sudo apt-get update
-          # fonts-noto-core carries NotoSansDevanagari, which is what
-          # modules/textrender.py looks for first. WITHOUT A DEVANAGARI FONT
-          # EVERY HINDI WORD ON SCREEN RENDERS AS AN EMPTY BOX, and nothing
-          # raises an error - so the extra Indic packages are installed as
-          # backups and the presence of one is asserted in the next step.
-          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core \
-            fonts-noto-core fonts-lohit-deva fonts-samyak-deva || true
-          # Retry the Devanagari fonts alone in case the combined install failed
-          # on one unavailable package name.
-          sudo apt-get install -y fonts-noto-core || true
-          sudo apt-get install -y fonts-indic || true
+          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core fontconfig
+
+          # DEVANAGARI FONT. Without one, every Hindi word on screen renders as an
+          # empty box - and nothing raises an error, so a broken reel would be
+          # published as a "success".
+          #
+          # Package names are NOT reliable here. An earlier version of this step
+          # installed `fonts-noto-devanagari`, which does not exist as an Ubuntu
+          # package, and the whole run died with exit code 100. Which package
+          # actually ships Noto's Devanagari faces (fonts-noto-core,
+          # fonts-noto-extra, fonts-indic, ...) also moves between releases.
+          #
+          # So: try several candidates INDIVIDUALLY, each allowed to fail, then
+          # verify by asking fontconfig what is actually installed. If none of
+          # them provided a Hindi font, download Noto Sans Devanagari directly -
+          # that removes the dependency on package naming entirely.
+          for pkg in fonts-noto-core fonts-indic fonts-lohit-deva \
+                     fonts-samyak-deva fonts-deva fonts-noto-extra ; do
+            sudo apt-get install -y "$pkg" 2>/dev/null \
+              && echo "installed: $pkg" \
+              || echo "not available on this release, skipping: $pkg"
+          done
+
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "No Hindi-capable font from apt - fetching Noto Sans Devanagari directly."
+            sudo mkdir -p /usr/share/fonts/truetype/krishna
+            for url in \
+              "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansDevanagari/hinted/ttf/NotoSansDevanagari-Bold.ttf" \
+              "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf" ; do
+              if sudo curl -fsSL --retry 3 --max-time 60 -o \
+                   /usr/share/fonts/truetype/krishna/NotoSansDevanagari-Bold.ttf "$url" ; then
+                echo "downloaded from: $url"
+                break
+              fi
+            done
+            sudo fc-cache -f >/dev/null 2>&1 || true
+          fi
           POLICY="/etc/ImageMagick-6/policy.xml"
           if [ -f "$POLICY" ]; then
             sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' "$POLICY" || true
@@ -218,43 +244,23 @@ jobs:
       - name: Verify a Devanagari font is installed
         if: ${{ github.event.inputs.diagnose_only != 'true' }}
         run: |
-          # This is a HARD FAILURE on purpose. Every other missing dependency in
-          # this pipeline degrades gracefully, but a missing Devanagari font does
-          # not: Pillow silently substitutes blank glyphs, so the run would
-          # "succeed" and publish a Hindi reel whose on-screen text and thumbnail
-          # caption are rows of empty boxes. Better to stop here than to upload
-          # a broken video to the channel.
-          echo "Devanagari fonts visible to fontconfig:"
-          fc-list :lang=hi family file 2>/dev/null | head -20 || true
-          FOUND=""
-          for f in \
-            /usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf \
-            /usr/share/fonts/truetype/noto/NotoSansDevanagari-SemiBold.ttf \
-            /usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf \
-            /usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf \
-            /usr/share/fonts/truetype/samyak/Samyak-Devanagari.ttf ; do
-            [ -f "$f" ] && FOUND="$f" && break
-          done
-          if [ -z "$FOUND" ]; then
-            echo "::error::No Devanagari font found. Hindi text would render as empty boxes."
-            echo "Install one of: fonts-noto-core, fonts-indic, fonts-lohit-deva"
+          # HARD FAILURE on purpose. Every other missing dependency in this
+          # pipeline degrades gracefully, but a missing Devanagari font does not:
+          # Pillow silently substitutes blank glyphs, so the run would "succeed"
+          # and publish a Hindi reel whose on-screen text and thumbnail caption
+          # are rows of empty boxes. Better to stop here than upload that.
+          #
+          # The check asks FONTCONFIG rather than testing hard-coded paths, so it
+          # cannot be defeated by a distro moving the install location.
+          echo "Hindi-capable fonts fontconfig can see:"
+          fc-list ":lang=hi" family file 2>/dev/null | head -20 || true
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "::error::No Devanagari font on this runner. Hindi text would render as empty boxes."
+            echo "Tried: fonts-noto-core, fonts-indic, fonts-lohit-deva, fonts-samyak-deva,"
+            echo "fonts-deva, fonts-noto-extra, and a direct download. All failed."
             exit 1
           fi
-          echo "OK -> $FOUND"
-          # Confirm Pillow can actually shape Devanagari with it (libraqm).
-          python3 - <<'PY'
-import sys
-try:
-    from PIL import Image, ImageDraw, ImageFont, features
-except Exception as exc:
-    print("::warning::Pillow not importable yet (%s); skipping shaping check." % exc)
-    sys.exit(0)
-print("Pillow raqm (complex text shaping):", features.check("raqm"))
-if not features.check("raqm"):
-    # Not fatal: text still renders, but conjuncts/matras may be positioned
-    # incorrectly. Surface it loudly so it is not mistaken for a font problem.
-    print("::warning::libraqm missing - Devanagari matras/conjuncts may be misplaced.")
-PY
+          echo "fontconfig reports a Hindi font is present."
 
       - name: Prepare background music
         if: ${{ github.event.inputs.diagnose_only != 'true' }}

@@ -103,7 +103,47 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core
+          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core fontconfig
+
+          # DEVANAGARI FONT. This step previously installed only fonts-dejavu-core,
+          # which contains NO Devanagari glyphs - and long-form has captions ON, so
+          # every katha would have carried a full subtitle track of empty boxes for
+          # 5-8 minutes straight, with no error in the log.
+          #
+          # Package names are not reliable: `fonts-noto-devanagari` does not exist
+          # as an Ubuntu package (an earlier reel run died on exactly that), and
+          # which package ships Noto's Devanagari faces moves between releases. So
+          # candidates are tried individually, then verified through fontconfig,
+          # with a direct download as the guaranteed fallback.
+          for pkg in fonts-noto-core fonts-indic fonts-lohit-deva \
+                     fonts-samyak-deva fonts-deva fonts-noto-extra ; do
+            sudo apt-get install -y "$pkg" 2>/dev/null \
+              && echo "installed: $pkg" \
+              || echo "not available on this release, skipping: $pkg"
+          done
+
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "No Hindi-capable font from apt - fetching Noto Sans Devanagari directly."
+            sudo mkdir -p /usr/share/fonts/truetype/krishna
+            for url in \
+              "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansDevanagari/hinted/ttf/NotoSansDevanagari-Bold.ttf" \
+              "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf" ; do
+              if sudo curl -fsSL --retry 3 --max-time 60 -o \
+                   /usr/share/fonts/truetype/krishna/NotoSansDevanagari-Bold.ttf "$url" ; then
+                echo "downloaded from: $url"
+                break
+              fi
+            done
+            sudo fc-cache -f >/dev/null 2>&1 || true
+          fi
+
+          echo "Hindi-capable fonts fontconfig can see:"
+          fc-list ":lang=hi" family file 2>/dev/null | head -10 || true
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "::error::No Devanagari font. A 5-8 minute katha would render its"
+            echo "entire caption track as empty boxes. Stopping instead."
+            exit 1
+          fi
           POLICY="/etc/ImageMagick-6/policy.xml"
           if [ -f "$POLICY" ]; then
             sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' "$POLICY" || true

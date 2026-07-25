@@ -32,8 +32,10 @@ import os
 
 log = logging.getLogger("krishna.textrender")
 
-# Ordered by preference. Noto Sans Devanagari is what the workflow installs
-# (fonts-noto-devanagari); the rest are common fallbacks on other distros.
+# Hard-coded paths are only the LAST resort. Package names and install paths vary
+# between distro releases - a CI run already failed on `fonts-noto-devanagari`,
+# which does not exist as an Ubuntu package at all - so the font is discovered
+# with fontconfig first (see _fc_query) and these are the fallback.
 _FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansDevanagari-SemiBold.ttf",
@@ -48,10 +50,56 @@ _FONT_CANDIDATES = (
 _resolved_font = None
 
 
+def _fc_query():
+    """Ask fontconfig for fonts that actually declare Hindi support.
+
+    WHY NOT JUST HARD-CODED PATHS
+    -----------------------------
+    The first version of this looked only at a fixed list of file paths and told
+    the operator to install `fonts-noto-devanagari` - a package that does not
+    exist on Ubuntu, which is exactly how a CI run failed. Whether Noto's
+    Devanagari faces land in fonts-noto-core, fonts-noto-extra, fonts-indic or
+    somewhere else varies by release, and the install path moves with it.
+
+    `fc-list :lang=hi` asks the system which installed fonts declare Hindi
+    coverage, so it works regardless of which package supplied them. Bold faces
+    are preferred: this text sits over video and needs the weight to stay legible.
+    """
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["fc-list", ":lang=hi", "file"],
+            capture_output=True, text=True, timeout=20,
+        )
+    except Exception as exc:
+        log.info("fontconfig not usable (%s); falling back to fixed paths.", exc)
+        return []
+
+    paths = []
+    for line in (out.stdout or "").splitlines():
+        path = line.split(":", 1)[0].strip().rstrip(":")
+        if path.lower().endswith((".ttf", ".otf")) and os.path.exists(path):
+            paths.append(path)
+
+    def rank(p):
+        name = os.path.basename(p).lower()
+        # Prefer a real Bold face, then SemiBold, then anything. Deprioritise
+        # Serif and UI variants, which read worse at large sizes over footage.
+        weight = 0 if "bold" in name else (1 if "semibold" in name else 2)
+        family = 0 if "notosansdevanagari" in name else (
+            1 if "devanagari" in name or "lohit" in name or "samyak" in name else 2
+        )
+        penalty = 1 if ("serif" in name or "-ui" in name or "ui-" in name) else 0
+        return (family, penalty, weight, len(name))
+
+    return sorted(set(paths), key=rank)
+
+
 def find_font():
     """Return a path to a Devanagari-capable TTF, or None.
 
-    KRISHNA_FONT env var wins so a font can be pinned without a code change.
+    Order: KRISHNA_FONT env var -> fontconfig (:lang=hi) -> fixed path list.
     """
     global _resolved_font
     if _resolved_font is not None:
@@ -63,6 +111,11 @@ def find_font():
         log.info("Using pinned font: %s", forced)
         return forced
 
+    for path in _fc_query():
+        _resolved_font = path
+        log.info("Devanagari font (via fontconfig): %s", path)
+        return path
+
     for path in _FONT_CANDIDATES:
         if os.path.exists(path):
             _resolved_font = path
@@ -70,15 +123,41 @@ def find_font():
                 log.warning(
                     "No Devanagari font found - falling back to %s, which CANNOT "
                     "draw Hindi. On-screen Hindi will show as empty boxes. Install "
-                    "fonts-noto-devanagari.", path,
+                    "fonts-noto-core or fonts-indic, or set KRISHNA_FONT to a "
+                    "Devanagari TTF.", path,
                 )
             else:
-                log.info("Devanagari font: %s", path)
+                log.info("Devanagari font (fixed path): %s", path)
             return path
 
     _resolved_font = ""
     log.error("No usable font found on this system; on-screen text disabled.")
     return None
+
+
+def has_devanagari_font():
+    """True only if the resolved font can actually draw Devanagari.
+
+    find_font() will happily return DejaVu as a last resort so that Latin text
+    still renders; this is the check to use when the question is specifically
+    'will Hindi come out as real letters or as empty boxes?'
+    """
+    path = find_font()
+    if not path:
+        return False
+    if "dejavu" in os.path.basename(path).lower():
+        return False
+    # Confirm by glyph lookup rather than by filename: a font named
+    # "...Devanagari..." that is missing the glyph would still fail silently.
+    try:
+        from PIL import ImageFont
+
+        font = ImageFont.truetype(path, 32)
+        mask = font.getmask("क")
+        return bool(mask.getbbox())
+    except Exception:
+        # Cannot prove it either way; trust the fontconfig/name signal.
+        return True
 
 
 def _pil():
