@@ -331,13 +331,25 @@ TAG_EVERGREEN = [
     "कान्हा की कहानी", "hindi kahani", "धार्मिक कथा",
 ]
 
-TAGS_CHAR_BUDGET = 480
+# YouTube enforces its 500-limit on snippet.tags against the UTF-8 ENCODING, not
+# the character count, and it quotes any tag containing a space (costing 2 more
+# bytes). On an English channel the difference is invisible - ASCII is 1 byte per
+# character - but every Devanagari character is 3 bytes, so a set measuring a
+# comfortable 385 "characters" is really 765 bytes. That is precisely how this
+# channel's first real upload failed: reason=invalidTags, after the video had
+# already rendered. Budget in bytes.
+TAGS_BYTE_BUDGET = 440
+TAG_MAX_BYTES = 90
 TAG_MAX_LEN = 60
 
 
 def _normalise_tag(tag):
     tag = re.sub(r"\s+", " ", str(tag or "").strip().lower()).strip(",")
-    return tag[:TAG_MAX_LEN]
+    tag = tag[:TAG_MAX_LEN]
+    # Trim by BYTES too - 60 Devanagari characters is 180 bytes.
+    while len(tag.encode("utf-8")) > TAG_MAX_BYTES and tag:
+        tag = tag[:-1]
+    return tag.strip()
 
 
 def build_tags(core_title="", moral="", keywords=None, rng=None, extra=None):
@@ -358,7 +370,7 @@ def build_tags(core_title="", moral="", keywords=None, rng=None, extra=None):
         if not tag or tag in used:
             continue
         cost = len(tag) + 1
-        if budget + cost > TAGS_CHAR_BUDGET:
+        if budget + cost > TAGS_BYTE_BUDGET:
             continue
         tags.append(tag)
         used.add(tag)

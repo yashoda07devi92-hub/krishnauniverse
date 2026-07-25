@@ -400,12 +400,25 @@ TAG_SUBJECT = {
     ],
 }
 
-TAGS_CHAR_BUDGET = 460  # under YouTube's 500-char total so the API never 400s
-TAG_MAX_LEN = 60        # one overlong tag just burns budget
+# YouTube enforces its 500-limit on snippet.tags against the UTF-8 ENCODING, not
+# the character count, and it quotes any tag containing a space (costing 2 more
+# bytes). On an English channel the difference is invisible - ASCII is 1 byte per
+# character - but every Devanagari character is 3 bytes, so a set measuring a
+# comfortable 385 "characters" is really 765 bytes. That is precisely how this
+# channel's first real upload failed: reason=invalidTags, after the video had
+# already rendered. Budget in bytes.
+TAGS_BYTE_BUDGET = 440  # under 500 with headroom for the uploader's own guard
+TAG_MAX_BYTES = 90      # one overlong tag just burns budget
 
 
 def _normalise_tag(tag):
     return " ".join(str(tag or "").replace(",", " ").split()).strip()
+
+
+def _tag_cost(tag):
+    """Bytes this tag consumes in YouTube's budget: UTF-8 length, +1 separator,
+    +2 if YouTube must quote it (it quotes any tag containing a space)."""
+    return len(tag.encode("utf-8")) + 1 + (2 if " " in tag else 0)
 
 
 def build_tags(core_title="", keywords=None, subject=None, rng=None, extra=None):
@@ -448,14 +461,13 @@ def build_tags(core_title="", keywords=None, subject=None, rng=None, extra=None)
     used = 0
     for raw in ordered:
         tag = _normalise_tag(raw)
-        if not tag or len(tag) > TAG_MAX_LEN:
+        if not tag or len(tag.encode("utf-8")) > TAG_MAX_BYTES:
             continue
         key = tag.lower()
         if key in seen:
             continue
-        # +1 for the comma YouTube counts between tags.
-        cost = len(tag) + 1
-        if used + cost > TAGS_CHAR_BUDGET:
+        cost = _tag_cost(tag)
+        if used + cost > TAGS_BYTE_BUDGET:
             continue
         seen.add(key)
         out.append(tag)

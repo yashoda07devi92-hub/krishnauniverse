@@ -39,8 +39,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # --------------------------------------------------------------------------
 MAX_TITLE = 100
 MAX_DESCRIPTION = 5000
-MAX_TAGS_CHARS = 500
+# YouTube enforces this against the UTF-8 ENCODING, not the character count, and
+# it quotes any tag containing a space (2 extra bytes). This check previously
+# measured CHARACTERS and therefore PASSED on a tag set that the API rejected -
+# 385 "characters" of Devanagari is 765 bytes. Measure bytes.
+MAX_TAGS_BYTES = 500
 MAX_HASHTAGS = 15
+
+
+def _tag_bytes(tags):
+    """What snippet.tags actually costs against YouTube's 500 limit.
+
+    UTF-8 length per tag, +1 separator, +2 where YouTube has to quote the tag -
+    which it does for any tag containing a space.
+    """
+    return sum(len(t.encode("utf-8")) + 1 + (2 if " " in t else 0) for t in tags)
 
 
 def _has_devanagari(s):
@@ -118,8 +131,10 @@ def check_shorts(rows, check):
         check.ok(len(title) <= MAX_TITLE, f"{tag}: title over {MAX_TITLE} chars", f"{len(title)}")
         check.ok(len(desc) <= MAX_DESCRIPTION, f"{tag}: description over {MAX_DESCRIPTION}", f"{len(desc)}")
 
-        tag_chars = sum(len(t) + 1 for t in tags)
-        check.ok(tag_chars <= MAX_TAGS_CHARS, f"{tag}: tags over {MAX_TAGS_CHARS} chars", f"{tag_chars}")
+        tag_bytes = _tag_bytes(tags)
+        check.ok(tag_bytes <= MAX_TAGS_BYTES,
+                 f"{tag}: tags over {MAX_TAGS_BYTES} BYTES (YouTube rejects with "
+                 f"invalidTags)", f"{tag_bytes} bytes")
         check.ok(len(tags) >= 8, f"{tag}: suspiciously few tags", f"{len(tags)}")
 
         check.ok(len(hashtags) <= MAX_HASHTAGS, f"{tag}: more than {MAX_HASHTAGS} hashtags",
@@ -226,8 +241,10 @@ def check_longform(rows, check):
 
         check.ok(len(title) <= MAX_TITLE, f"{tag}: title over {MAX_TITLE} chars", f"{len(title)}")
         check.ok(len(desc) <= MAX_DESCRIPTION, f"{tag}: description over {MAX_DESCRIPTION}", f"{len(desc)}")
-        tag_chars = sum(len(t) + 1 for t in tags)
-        check.ok(tag_chars <= MAX_TAGS_CHARS, f"{tag}: tags over {MAX_TAGS_CHARS} chars", f"{tag_chars}")
+        tag_bytes = _tag_bytes(tags)
+        check.ok(tag_bytes <= MAX_TAGS_BYTES,
+                 f"{tag}: tags over {MAX_TAGS_BYTES} BYTES (YouTube rejects with "
+                 f"invalidTags)", f"{tag_bytes} bytes")
         check.ok(len(m["hashtags"]) <= MAX_HASHTAGS, f"{tag}: more than {MAX_HASHTAGS} hashtags")
         # The parent repo checked that the old mismatched "MoralTales" brand was
         # gone. Here the equivalent risk is an English-only description, i.e. the
