@@ -27,7 +27,15 @@ CLIENT_SECRET_FILE = os.path.join(str(BASE_DIR), "yt_client_secret.json")
 TOKEN_FILE = os.path.join(str(BASE_DIR), "yt_token.json")
 
 # YouTube rejects the request if the tags field exceeds 500 characters in total.
-TAGS_CHAR_BUDGET = 480
+# YouTube enforces its 500-limit on snippet.tags against the UTF-8 ENCODING, not
+# the character count, and it quotes any tag containing a space (costing 2 more
+# bytes). On an English channel the difference is invisible - ASCII is 1 byte per
+# character - but every Devanagari character is 3 bytes, so a set measuring a
+# comfortable 385 "characters" is really 765 bytes. That is precisely how this
+# channel's first real upload failed: reason=invalidTags, after the video had
+# already rendered. Budget in bytes.
+TAGS_BYTE_BUDGET = 460
+TAG_MAX_BYTES = 100
 
 
 def _trim_tags(tags):
@@ -37,8 +45,13 @@ def _trim_tags(tags):
         tag = str(tag or "").strip()
         if not tag:
             continue
-        cost = len(tag) + 1
-        if used + cost > TAGS_CHAR_BUDGET:
+        if len(tag.encode("utf-8")) > TAG_MAX_BYTES:
+            log.warning("Dropping oversized tag (%d bytes): %r",
+                        len(tag.encode("utf-8")), tag[:40])
+            continue
+        # UTF-8 bytes, +1 separator, +2 if YouTube quotes it (any tag with a space).
+        cost = len(tag.encode("utf-8")) + 1 + (2 if " " in tag else 0)
+        if used + cost > TAGS_BYTE_BUDGET:
             continue
         kept.append(tag)
         used += cost

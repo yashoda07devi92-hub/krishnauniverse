@@ -13,7 +13,8 @@
     "height": 1920,
     "fps": 30,
     "target_duration_seconds": 30,
-    "min_duration_seconds": 20,
+    "min_duration_seconds": 25,
+    "min_duration_note": "HARD FLOOR - a Short must never come out under 25s. video_composer clamps the timeline to this, so a short narration is padded rather than published short. But padding leaves trailing silence, so gemini.min_words below makes the NARRATION long enough in the first place; the clamp is only the safety net.",
     "max_duration_seconds": 36,
     "scene_cut_seconds": 2.6,
     "clip_cut_seconds": 1.6,
@@ -114,8 +115,10 @@
   "gemini": {
     "model": "gemini-2.0-flash",
     "model_candidates": ["gemini-2.0-flash", "gemini-flash-latest", "gemini-2.5-flash"],
-    "target_words": 68,
-    "target_words_note": "Hindi TTS at -10% rate runs roughly 130-140 words/min, so ~68 words lands near 30s. Raising this without lowering the rate is what makes a 'Short' overshoot 60s.",
+    "target_words": 72,
+    "min_words": 62,
+    "max_words": 84,
+    "target_words_note": "Hindi TTS at -10% rate runs roughly 140 words/min, so 62 words ~= 26.5s and 84 words ~= 36s. min_words is set above the 58 words that 25s strictly needs, because TTS pace varies with sentence length and punctuation - a script sitting exactly on 25s would sometimes land under it. Raising target_words without lowering the rate is what makes a 'Short' overshoot 60s.",
     "temperature": 0.92
   },
   "seo": {

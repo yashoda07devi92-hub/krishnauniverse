@@ -106,31 +106,56 @@ def _clean_core(core):
     return core or "श्रीकृष्ण की एक कथा"
 
 
-def _lesson_from_moral(moral):
-    """Pull a short label out of the one-sentence Hindi moral.
+# The concepts these kathas are actually about. The lesson label is matched
+# against this list FIRST because a positional guess picks the wrong word: the
+# moral "जो तुम्हें रोज़ पालता है, उसका आदर करो" yields the pronoun "तुम्हें",
+# and a tag like "तुम्हें की कथा" is meaningless in either language and is
+# searched for by nobody.
+LESSON_CONCEPTS = [
+    "अहंकार", "क्षमा", "प्रेम", "भक्ति", "धैर्य", "सत्य", "कर्म", "त्याग",
+    "विश्वास", "मित्रता", "दोस्ती", "सेवा", "संयम", "ज़िम्मेदारी", "अपमान",
+    "लोभ", "क्रोध", "मोह", "डर", "ज्ञान", "गुरु", "श्रद्धा", "आदर", "सम्मान",
+    "दान", "वचन", "प्रतिज्ञा", "माँ", "धर्म", "न्याय", "शांति", "करुणा",
+    "विनम्रता", "सच्चाई", "मेहनत", "बलिदान", "समर्पण", "संतोष",
+]
 
-    The version this replaces used re.findall(r"[A-Za-z]+", ...), which matches
-    NOTHING in Devanagari - so on a Hindi channel every single episode would have
-    fallen through to the same hard-coded default and the {lesson} slot in every
-    title pattern would have been identical. That is the exact repetition this
-    module exists to prevent, and it would have been invisible: no error, just
-    one word repeated across the whole library.
+# Pronouns and connectives that a positional pick keeps landing on.
+_LESSON_STOP = {
+    "है", "हैं", "कि", "को", "का", "की", "के", "में", "से", "और", "ही", "जो",
+    "वो", "यह", "ये", "पर", "तो", "भी", "एक", "नहीं", "तुम", "तुम्हें",
+    "तुम्हारा", "तुम्हारी", "आप", "हम", "मैं", "उसका", "उसकी", "उसके", "अपना",
+    "अपनी", "अपने", "कोई", "सब", "इस", "उस", "हर", "बहुत", "कुछ", "जब", "तब",
+    "अगर", "फिर", "लिए", "साथ", "बिना", "जाता", "जाती", "होता", "होती", "करो",
+    "करता", "करती", "रहा", "रही", "गया", "गयी", "देता", "देती", "मत", "क्यों",
+}
+
+
+def _lesson_from_moral(moral):
+    """Return a short, searchable concept label from the one-line Hindi moral.
+
+    Two bugs preceded this. First, the original used
+    re.findall(r"[A-Za-z]+", ...), which matches NOTHING in Devanagari, so every
+    episode fell through to one identical label. Then a positional fallback
+    picked the first non-stopword, which on real morals kept selecting pronouns.
+
+    So: match a known concept anywhere in the moral, and only if none is present
+    fall back to the LONGEST content word - concepts in Hindi are longer than
+    the grammar around them ("अहंकार" vs "जो"), so length is a better signal
+    than position.
     """
     text = str(moral or "").strip()
-    # Strip the fixed opener the prompt asks the model to use.
     text = re.sub(r"^इस कथा की सीख (यही है )?कि\s*", "", text)
     text = re.sub(r"^the moral of the story is( that)?\s*", "", text, flags=re.I)
-    # \w with re.UNICODE covers Devanagari; drop very short particles.
-    stop = {"है", "कि", "को", "का", "की", "के", "में", "से", "और", "ही",
-            "जो", "वो", "यह", "ये", "पर", "तो", "भी", "एक", "हैं", "नहीं"}
+
+    for concept in LESSON_CONCEPTS:
+        if concept in text:
+            return concept
+
     words = [w for w in re.findall(r"[\w\u0900-\u097F]+", text, re.UNICODE)
-             if len(w) > 2 and w not in stop]
+             if len(w) > 3 and w not in _LESSON_STOP]
     if not words:
         return "भक्ति"
-    # ONE word, not two. Hindi is dense - the first content word is already the
-    # concept ("क्षमा", "अहंकार", "धैर्य"), whereas taking two produced labels
-    # like "क्षमा सबसे", which reads as a truncated sentence inside a title.
-    return words[0]
+    return max(words, key=len)
 
 
 def build_title(core_title, moral="", rng=None):
@@ -331,13 +356,25 @@ TAG_EVERGREEN = [
     "कान्हा की कहानी", "hindi kahani", "धार्मिक कथा",
 ]
 
-TAGS_CHAR_BUDGET = 480
+# YouTube enforces its 500-limit on snippet.tags against the UTF-8 ENCODING, not
+# the character count, and it quotes any tag containing a space (costing 2 more
+# bytes). On an English channel the difference is invisible - ASCII is 1 byte per
+# character - but every Devanagari character is 3 bytes, so a set measuring a
+# comfortable 385 "characters" is really 765 bytes. That is precisely how this
+# channel's first real upload failed: reason=invalidTags, after the video had
+# already rendered. Budget in bytes.
+TAGS_BYTE_BUDGET = 440
+TAG_MAX_BYTES = 90
 TAG_MAX_LEN = 60
 
 
 def _normalise_tag(tag):
     tag = re.sub(r"\s+", " ", str(tag or "").strip().lower()).strip(",")
-    return tag[:TAG_MAX_LEN]
+    tag = tag[:TAG_MAX_LEN]
+    # Trim by BYTES too - 60 Devanagari characters is 180 bytes.
+    while len(tag.encode("utf-8")) > TAG_MAX_BYTES and tag:
+        tag = tag[:-1]
+    return tag.strip()
 
 
 def build_tags(core_title="", moral="", keywords=None, rng=None, extra=None):
@@ -345,7 +382,10 @@ def build_tags(core_title="", moral="", keywords=None, rng=None, extra=None):
     lesson = _lesson_from_moral(moral).lower()
     candidates = [_clean_core(core_title).lower()]
     if lesson:
-        candidates += [f"{lesson} story", f"story about {lesson}", lesson]
+        # Hindi patterns, not "{lesson} story". With a Hindi lesson word that
+        # produced half-English tags like "क्षमा story", which nobody searches
+        # for in either language.
+        candidates += [lesson, f"{lesson} की कथा", f"{lesson} पर कथा"]
     ever = list(TAG_EVERGREEN)
     rng.shuffle(ever)
     candidates += ever
@@ -357,8 +397,10 @@ def build_tags(core_title="", moral="", keywords=None, rng=None, extra=None):
         tag = _normalise_tag(raw)
         if not tag or tag in used:
             continue
-        cost = len(tag) + 1
-        if budget + cost > TAGS_CHAR_BUDGET:
+        # UTF-8 bytes, +1 separator, +2 where YouTube quotes the tag (any tag
+        # containing a space). Characters would undercount Devanagari 3x.
+        cost = len(tag.encode("utf-8")) + 1 + (2 if " " in tag else 0)
+        if budget + cost > TAGS_BYTE_BUDGET:
             continue
         tags.append(tag)
         used.add(tag)
