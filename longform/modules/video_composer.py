@@ -174,49 +174,60 @@ def _gradient_background(duration):
         return ColorClip(size=(W, H), color=tuple(solid)).set_duration(duration)
 
 
-# Camera moves available to the motion engine. A single slow centre zoom used
-# for every image - which is what this replaced - is exactly what reads as a
-# slideshow: the eye recognises the repeating move and stops believing the frame
-# is real.
+# LONG-FORM MOVE SET - deliberately different from the Shorts one.
+#
+# A per-frame resize is by far the most expensive thing in the render, and a
+# 6-8 minute katha is ~11,700 frames against a Short's ~900. Making every shot
+# zoom (as the Shorts engine does) would push this job past its 90-minute
+# timeout.
+#
+# So half of these are PURE TRANSLATIONS, which skip the resize entirely, and
+# half carry a zoom. Alternating them still reads as camera work - the failure
+# mode was never "not enough zoom", it was every frame being completely static
+# (ai_images.motion defaulted to false, so the katha was a crossfaded photo
+# sequence).
 _MOVES = (
-    "push_in", "pull_out",
-    "pan_left", "pan_right",
-    "tilt_up", "tilt_down",
-    "diag_ul", "diag_dr",
+    "pan_left", "push_in",
+    "tilt_down", "diag_dr_out",
+    "pan_right", "pull_out",
+    "tilt_up", "diag_ul_in",
 )
 
 
+def _ease(f):
+    """Ease-in-out. A linear move starts and stops abruptly, which looks
+    mechanical; real camera moves accelerate and settle."""
+    return f * f * (3.0 - 2.0 * f)
+
+
 def _motion_from_image(path, duration, move=None):
-    """Animate a still with a real camera move. Returns a WxH clip.
+    """Animate a still with a combined pan + zoom. Returns a WxH clip.
 
-    WHY THIS REPLACED THE STATIC PATH
-    ---------------------------------
-    The previous function returned a STATIC image whenever ai_images.motion was
-    false - and false was the shipped default. So the long-form video was
-    literally a crossfaded photo sequence, which is precisely the "slideshow"
-    look this channel must not have.
+    HOW IT WORKS
+    ------------
+    ai_images already delivers the frame at the OVERSCANNED size, so there are
+    spare pixels outside the visible area and nothing needs upscaling here. The
+    clip is translated inside a WxH composite while being scaled, so pixels move
+    across the frame AND the framing tightens or opens at the same time.
 
-    The image is fitted to an OVERSCANNED frame, leaving spare pixels outside the
-    visible area, then translated inside a WxH composite so pixels genuinely move
-    across the frame rather than only scaling about the centre.
-
-    Pure translations skip moviepy's per-frame `resize`, which resamples the whole
-    oversized image on every frame and is the most expensive operation in the
-    render. Only the two zoom moves pay that cost, so most segments stay cheap -
-    which matters here, where a 6-8 minute video has far more frames than a Short.
+    The move is eased rather than linear, and every move carries a zoom, so no
+    segment sits still.
     """
     from moviepy.editor import CompositeVideoClip, ImageClip
 
     if move is None:
         move = random.choice(_MOVES)
 
-    over = float(get_cfg("motion.overscan", 1.22))
-    zoom = float(get_cfg("motion.zoom_amount", 0.08))
-    ow = int(W * over); oh = int(H * over)
-    ow += ow % 2; oh += oh % 2
+    over = float(get_cfg("motion.overscan", 1.18))
+    zoom = float(get_cfg("motion.zoom_amount", 0.16))
+    ow = int(W * over)
+    oh = int(H * over)
+    ow += ow % 2
+    oh += oh % 2
 
     try:
-        base = _fit_cover(ImageClip(path).set_duration(duration), ow, oh)
+        base = ImageClip(path).set_duration(duration)
+        base = _fit_cover(base, ow, oh)
     except Exception as exc:
         log.warning("Could not load scene image %s (%s).", path, exc)
         return None
@@ -227,36 +238,42 @@ def _motion_from_image(path, duration, move=None):
     cy = -slack_y / 2.0
 
     def frac(t):
-        return min(1.0, max(0.0, (t / duration) if duration else 0.0))
+        return _ease(min(1.0, max(0.0, (t / duration) if duration else 0.0)))
+
+    # Direction of travel for this move, as a fraction of the available slack.
+    dx, dy = 0.0, 0.0
+    if "pan_left" in move or "diag_ul" in move:
+        dx = -1.0
+    elif "pan_right" in move or "diag_dr" in move:
+        dx = 1.0
+    if "tilt_up" in move or "diag_ul" in move:
+        dy = -1.0
+    elif "tilt_down" in move or "diag_dr" in move:
+        dy = 1.0
+
+    zooming_in = move.endswith("_in") or move == "push_in"
+    # A move with no _in/_out suffix is a pure translation: skip moviepy's
+    # per-frame resize, which is the single most expensive operation here.
+    has_zoom = move.endswith("_in") or move.endswith("_out")
 
     try:
-        if move in ("push_in", "pull_out"):
-            def scale(t):
-                f = frac(t)
-                return 1.0 + zoom * f if move == "push_in" else (1.0 + zoom) - zoom * f
-            seg = base.resize(scale).set_position(("center", "center"))
-            return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
+        def scale(t):
+            f = frac(t)
+            return 1.0 + zoom * f if zooming_in else (1.0 + zoom) - zoom * f
 
         def pos(t):
             f = frac(t)
-            if move == "pan_left":
-                return (cx - (slack_x / 2.0) * f, cy)
-            if move == "pan_right":
-                return (cx + (slack_x / 2.0) * f, cy)
-            if move == "tilt_up":
-                return (cx, cy - (slack_y / 2.0) * f)
-            if move == "tilt_down":
-                return (cx, cy + (slack_y / 2.0) * f)
-            if move == "diag_ul":
-                return (cx - (slack_x / 2.0) * f, cy - (slack_y / 2.0) * f)
-            if move == "diag_dr":
-                return (cx + (slack_x / 2.0) * f, cy + (slack_y / 2.0) * f)
-            return (cx, cy)
+            return (cx + dx * (slack_x / 2.0) * f,
+                    cy + dy * (slack_y / 2.0) * f)
 
-        seg = base.set_position(pos)
+        seg = base.resize(scale) if has_zoom else base
+        # A pure zoom stays centred; anything with travel uses the position fn.
+        seg = seg.set_position(("center", "center")) if (dx == 0.0 and dy == 0.0) \
+            else seg.set_position(pos)
         return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
     except Exception as exc:
-        log.warning("Motion move %r failed for %s (%s); static frame.", move, path, exc)
+        log.warning("Motion move %r failed for %s (%s); using static frame.",
+                    move, path, exc)
         try:
             return _fit_cover(ImageClip(path).set_duration(duration))
         except Exception:
@@ -491,6 +508,48 @@ def _make_backdrop(tw, th, start, seg_dur, y_top, opacity, color, rounded=True):
 # ==========================================================================
 # Captions (full length)
 # ==========================================================================
+def _build_film_grain(duration):
+    """A faint moving grain layer over the whole reel.
+
+    WHY: generated frames are unnaturally CLEAN - no sensor noise, no texture -
+    and that cleanliness is a large part of why animated stills read as a
+    slideshow rather than as footage. A little moving grain gives every frame
+    something that changes even when the camera move is slow, and it is the
+    cheapest cinematic cue available.
+
+    Deliberately generated at a fraction of the frame size and scaled up, so the
+    grain is soft rather than a pixel-level fizz, and so it costs almost nothing.
+    """
+    if not get_cfg("grain.enabled", True):
+        return []
+    try:
+        import numpy as np
+        from moviepy.editor import VideoClip
+
+        strength = float(get_cfg("grain.opacity", 0.07))
+        if strength <= 0:
+            return []
+        small_w = max(8, W // 6)
+        small_h = max(8, H // 6)
+        rng = np.random.default_rng(random.randint(1, 1_000_000))
+        # A handful of pre-rendered plates cycled over time: regenerating noise
+        # every frame is slow, and a fixed plate would look like a dirty lens.
+        plates = [rng.normal(128, 34, (small_h, small_w)).clip(0, 255).astype("uint8")
+                  for _ in range(6)]
+
+        def make_frame(t):
+            plate = plates[int(t * 12) % len(plates)]
+            return np.dstack([plate] * 3)
+
+        grain = VideoClip(make_frame, duration=duration)
+        grain = grain.resize((W, H)).set_opacity(strength)
+        log.info("Film grain layer at %.0f%% opacity.", strength * 100)
+        return [grain]
+    except Exception as exc:
+        log.warning("Film grain failed (%s); skipping.", exc)
+        return []
+
+
 def _build_caption_clips(text, duration, skip_before=0.0):
     if not get_cfg("captions.enabled", True):
         return []
@@ -779,6 +838,8 @@ def compose_video(voice_path, text, keywords, title=None, hook_text=None, out_pa
 
     # 3) Captions for the whole story (skip during the intro card window).
     caption_clips = _build_caption_clips(text, duration, skip_before=intro_dur)
+    # Cinematic texture under the text layers, over the footage.
+    layers.extend(_build_film_grain(duration))
     layers.extend(caption_clips)
 
     # 4) Intro + outro overlays on top.
