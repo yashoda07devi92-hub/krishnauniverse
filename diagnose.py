@@ -117,7 +117,7 @@ def check_pexels():
     print(f"  RESULT: ✅ WORKING - got {len(videos)} clips; "
           f"{hd_count} are full-HD (no upscale).")
     print(f"  Sample best renditions: {', '.join(sample[:5])}")
-    print("  EFFECT: backgrounds will be REAL HD animal footage. 🎉")
+    print("  EFFECT: backgrounds will be real atmosphere footage (river, peacock, cows, diya). 🎉")
     return hd_count > 0
 
 
@@ -171,6 +171,52 @@ def check_youtube():
     return ok
 
 
+def check_pollinations():
+    print(LINE)
+    print("4) POLLINATIONS  (decides whether KRISHNA APPEARS AT ALL)")
+    print(LINE)
+    key = os.environ.get("POLLINATIONS_TOKEN", "").strip()
+    if not key:
+        print("  ❌ POLLINATIONS_TOKEN is NOT set.")
+        print("  EFFECT: scene images get rate-limited (HTTP 429) and many fail.")
+        print("  On this channel the generated images ARE the video - there is no")
+        print("  stock footage of Krishna - so a rate-limited run produces a reel")
+        print("  with no Krishna in it, only atmosphere footage.")
+        print("  FIX: free key at https://enter.pollinations.ai (take the sk_ one)")
+        return False
+    print(f"  ✅ Key detected (length {len(key)}).")
+    print("  EFFECT: per-scene Krishna images generate without rate limiting.")
+    return True
+
+
+def check_font():
+    print(LINE)
+    print("5) DEVANAGARI FONT  (decides whether HINDI TEXT IS READABLE)")
+    print(LINE)
+    try:
+        from modules import textrender
+    except Exception as exc:
+        print(f"  ⚠️  Could not import textrender ({exc}).")
+        return False
+
+    path = textrender.find_font()
+    if not path:
+        print("  ❌ No font found at all. On-screen text will be skipped entirely.")
+        return False
+    print(f"  Font resolved: {path}")
+    if textrender.has_devanagari_font():
+        print("  ✅ It can draw Devanagari.")
+        return True
+    # This is the failure mode that does NOT announce itself.
+    print("  ❌ This font CANNOT draw Devanagari - Hindi renders as empty boxes.")
+    print("  Nothing raises an error, so the reel would upload looking broken.")
+    print("  FIX: install fonts-noto-core or fonts-indic, or set KRISHNA_FONT.")
+    print("  NOTE: there is no Ubuntu package called 'fonts-noto-devanagari' -")
+    print("  a CI run already failed on that name. The workflow now discovers the")
+    print("  font through fontconfig and downloads Noto directly if apt has none.")
+    return False
+
+
 def main():
     print("\n" + LINE)
     print(" Krishna Universe - SECRET / SOURCE DIAGNOSTIC")
@@ -178,19 +224,28 @@ def main():
     pex = check_pexels()
     gem = check_gemini()
     yt = check_youtube()
+    poll = check_pollinations()
+    font = check_font()
 
     print("\n" + LINE)
     print(" FINAL VERDICT")
     print(LINE)
     if pex:
-        print(" BACKGROUND : ✅ Real HD animal footage (Pexels working)")
+        print(" ATMOSPHERE : ✅ Real footage available (Pexels working)")
     else:
-        print(" BACKGROUND : ❌ Plain gradient ONLY (Pexels NOT working) <-- FIX THIS")
+        print(" ATMOSPHERE : ❌ No real footage (Pexels NOT working)")
     print(f" SCRIPT     : {'AI (Gemini)' if gem else 'quotes.json fallback (fine)'}")
     print(f" UPLOAD     : {'✅ secrets present' if yt else '❌ check YT secrets'}")
+    print(f" KRISHNA IMG: {'✅ Pollinations key set' if poll else '❌ rate-limited, may render with NO Krishna'}")
+    print(f" HINDI TEXT : {'✅ Devanagari font OK' if font else '❌ would render as EMPTY BOXES'}")
     print(LINE)
+    if not font:
+        print(" >> Fix the font FIRST. It is the only failure here that ships a")
+        print("    broken-looking video while reporting success.")
+    if not poll:
+        print(" >> Then POLLINATIONS_TOKEN: without it the leela may not appear.")
     if not pex:
-        print(" >> The #1 fix for boring/same backgrounds: make PEXELS_API_KEY valid.")
+        print(" >> PEXELS_API_KEY affects the real atmosphere shots cut between scenes.")
     print("")
     print("(NOTE: this run is marked FAILED (red X) ON PURPOSE so the result")
     print(" can be read back remotely. The red X is EXPECTED and harmless -")
