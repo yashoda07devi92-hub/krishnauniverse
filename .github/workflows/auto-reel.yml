@@ -109,6 +109,17 @@ on:
         description: "Upload generated reels to YouTube"
         required: false
         default: "true"
+      privacy:
+        description: "Privacy for THIS run's uploads. Use 'unlisted' for a first
+          test you want on YouTube but not in front of subscribers, then flip it
+          in Studio once you have watched it. Scheduled runs always use 'public'."
+        required: false
+        default: "public"
+        type: choice
+        options:
+          - public
+          - unlisted
+          - private
       upload_instagram:
         description: "Upload to Instagram (risky, off by default)"
         required: false
@@ -307,9 +318,19 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "days=1" >> "$GITHUB_OUTPUT"
             echo "per_day=1" >> "$GITHUB_OUTPUT"
+            # A scheduled run is the channel operating normally - always public.
+            echo "privacy=public" >> "$GITHUB_OUTPUT"
           else
             echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
             echo "per_day=${{ github.event.inputs.per_day }}" >> "$GITHUB_OUTPUT"
+            # Whitelisted rather than passed through. The value goes to the
+            # YouTube API, which rejects anything outside these three and fails
+            # the whole upload - so an accidental typo would cost the render.
+            case "${{ github.event.inputs.privacy }}" in
+              unlisted) echo "privacy=unlisted" >> "$GITHUB_OUTPUT" ;;
+              private)  echo "privacy=private"  >> "$GITHUB_OUTPUT" ;;
+              *)        echo "privacy=public"   >> "$GITHUB_OUTPUT" ;;
+            esac
           fi
 
       - name: Generate reel(s)
@@ -343,7 +364,9 @@ jobs:
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
         run: |
-          python upload_youtube.py --limit "${{ steps.params.outputs.per_day }}" --privacy public
+          echo "Uploading with privacy: ${{ steps.params.outputs.privacy }}"
+          python upload_youtube.py --limit "${{ steps.params.outputs.per_day }}" \
+            --privacy "${{ steps.params.outputs.privacy }}"
 
       - name: Upload to Instagram (optional)
         if: ${{ github.event.inputs.diagnose_only != 'true' && github.event.inputs.selftest != 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_instagram == 'true' }}
