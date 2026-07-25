@@ -74,7 +74,7 @@ def _build_title(entry):
 
     log.info("No youtube_title in manifest for %r; deriving one now.", entry.get("title"))
     return seo.build_title(
-        core_title=entry.get("title") or "A KrishnaUniverse Story",
+        core_title=entry.get("title") or "श्रीकृष्ण की एक सीख",
         text=entry.get("text", ""),
         keywords=entry.get("keywords") or [],
     )[:100]
@@ -87,9 +87,10 @@ def _description(entry):
     if desc and "#" in desc:
         return desc
     meta = seo.build_metadata(
-        core_title=entry.get("title") or "A KrishnaUniverse Story",
+        core_title=entry.get("title") or "श्रीकृष्ण की एक सीख",
         text=entry.get("text", ""),
         keywords=entry.get("keywords") or [],
+        seekh=entry.get("seekh", ""),
     )
     return meta["youtube_description"]
 
@@ -170,7 +171,7 @@ def upload_pending(limit=1, privacy=None):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Upload KrishnaUniverse reels to YouTube.")
+    parser = argparse.ArgumentParser(description="Upload Krishna Universe reels to YouTube.")
     parser.add_argument("--authorize", action="store_true", help="Run one-time OAuth authorization.")
     parser.add_argument("--limit", type=int, default=1, help="Max reels to upload this run.")
     parser.add_argument("--privacy", type=str, default=None,

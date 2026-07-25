@@ -13,7 +13,7 @@ import os
 
 from modules.config import setup_logging, get_env
 
-log = logging.getLogger("krishnakatha.diagnose")
+log = logging.getLogger("krishna.diagnose")
 
 
 def _status(name, present, detail=""):

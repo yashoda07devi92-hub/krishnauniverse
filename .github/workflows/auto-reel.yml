@@ -1,30 +1,33 @@
-name: KrishnaUniverse Auto Reel
+name: Krishna Universe Auto Reel
 # Schedule re-registered: 2026-06-21
 
 on:
   schedule:
     # ---------------------------------------------------------------------
-    # 5 reels/day at INDIA prime time. The audience for Hindi Krishna katha is
-    # in India, so every slot below is reasoned in IST:
+    # 5 reels/day, spread across THREE US audience windows instead of stacking
+    # all of them into the evening:
     #
-    #   2 reels - MORNING PUJA   ~7:15 AM, ~8:45 AM IST  <- devotional peak
-    #   1 reel  - LUNCH          ~1:30 PM IST
-    #   2 reels - NIGHT PRIME    ~8:45 PM, ~10:30 PM IST <- YouTube India peak
+    #   3 reels - EVENING PRIME  (7:00 PM - 1:30 AM ET)  <- the main window
+    #   1 reel  - MORNING SCROLL (6:00 AM - 9:00 AM ET)
+    #   1 reel  - AFTER SCHOOL   (3:00 PM - 5:00 PM ET)
     #
-    # WHY SPREAD RATHER THAN STACKED: on a new channel every upload is tested
-    # against roughly the same small slice of subscribers. Uploads inside one
-    # short block compete with each other instead of with the rest of YouTube.
+    # WHY NOT ALL FIVE IN THE EVENING: on a channel this size every upload is
+    # tested against roughly the same small slice of subscribers. Five uploads
+    # inside one five-hour block means video 2 enters the feed while video 1 is
+    # still being tested, so they compete with each other instead of with the
+    # rest of YouTube. Splitting the day gives each upload its own audience.
     #
-    # WHY A MORNING SLOT AT ALL: devotional content behaves differently from
-    # entertainment. Puja/aarti hours are a genuine second peak for this niche,
-    # which general "best time to post" advice does not capture.
+    # THIS CHANNEL TARGETS INDIA (IST), NOT THE US.
+    # Devotional viewing in India has two genuine peaks rather than one: the
+    # morning puja window (roughly 6-8 AM) and the evening from sandhya aarti
+    # through late night. The slots below cover both, plus a lunch slot.
     #
-    # THREE THINGS THESE TIMES ACCOUNT FOR
+    # FOUR THINGS THESE TIMES ACCOUNT FOR
     #
     # 1) CRON TIME IS NOT PUBLISH TIME. THE LEAD IS ~80 MINUTES, MEASURED.
-    #    A GitHub Actions schedule is queued, not guaranteed. Measured across
-    #    five consecutive scheduled runs on a sibling repo running this same
-    #    pipeline:
+    #    A GitHub Actions schedule is queued, not guaranteed. This figure is not
+    #    a guess - it was measured against five consecutive scheduled runs on
+    #    the sibling repo this pipeline came from:
     #
     #        cron 14:43 UTC -> started 16:06   (+83 min)
     #        cron 17:29 UTC -> started 18:57   (+88 min)
@@ -33,45 +36,57 @@ on:
     #        cron 23:53 UTC -> started 01:11   (+78 min)
     #                                  average  +78 min
     #
-    #    Almost all of that is queue time, not render time. Every cron below is
-    #    therefore set ~80 MINUTES BEFORE its intended publish time. Do not
-    #    "tidy" these into round numbers and do not shorten the lead without
-    #    re-measuring with `python slot_report.py --shorts-only`, which reads the
-    #    real publish hour off YouTube instead of guessing.
+    #    Those runs completed in 4-6 minutes, so essentially all of the lead is
+    #    queue time, not render time. Every cron below is set 80 MINUTES before
+    #    its intended publish time. Do NOT "tidy" these into round numbers, and
+    #    do not shorten the lead without re-measuring with
+    #    `python slot_report.py --shorts-only`, which reads the real publish hour
+    #    off YouTube instead of guessing.
     #
-    # 2) IST HAS NO DAYLIGHT SAVING. This is a real advantage over a US-facing
-    #    channel: cron is fixed UTC, and because IST is UTC+5:30 all year, these
-    #    slots never drift. They are set once and stay correct. (A US schedule
-    #    has to be placed so both EDT and EST stay inside the target window.)
+    # 2) IST HAS NO DAYLIGHT SAVING - THIS IS SIMPLER THAN THE US CASE.
+    #    India stays on UTC+5:30 all year, so unlike the US schedule this
+    #    pipeline was ported from, these crons NEVER need a seasonal correction.
+    #    cron UTC = IST - 5:30 - 1:20 lead:
+    #        00:25 UTC -> 07:15 IST     12:25 UTC -> 19:15 IST
+    #        06:40 UTC -> 13:30 IST     14:25 UTC -> 21:15 IST
+    #                                   15:55 UTC -> 22:45 IST
     #
-    # 2b) SCHEDULED RUNS ARE SOMETIMES DROPPED ENTIRELY, with "The job was not
-    #    acquired by Runner of type hosted" and a GitHub internal error - no
-    #    runner is ever assigned, so nothing in this repo can prevent it. It
-    #    costs one reel. Minute values below avoid :00 and :30, which is when the
-    #    scheduler is most congested and both delays and drops are worst.
+    # 3) SCHEDULED RUNS ARE SOMETIMES DROPPED ENTIRELY.
+    #    A run on the sibling repo failed with "The job was not acquired by
+    #    Runner of type hosted even after multiple attempts" plus a GitHub
+    #    internal server error - no runner was ever assigned, so no code change
+    #    could have prevented it. It costs one reel; there is nothing to fix.
+    #    Minute values below avoid :00 and :30, when the scheduler is most
+    #    congested and both delays and dropped runs are worst.
     #
-    # 3) THE YOUTUBE API QUOTA, NOT GITHUB MINUTES.
-    #    The repo is public, so Actions minutes are unlimited - but the YouTube
-    #    Data API allows 10,000 units/day and videos.insert costs 1,600, a hard
-    #    ceiling of 6 uploads per day. The quota resets at midnight PACIFIC
-    #    (07:00 UTC), NOT at UTC midnight, which is why the slot list below is
-    #    checked against that boundary rather than the calendar day. Budget:
-    #        5 reels x 1,650 = 8,250 units  (leaves room for one retry)
-    #    The 13:55 slot is skipped on long-form days (Mon/Wed/Fri) so those days
-    #    stay at 4 reels + 1 long-form = 8,250 instead of 9,900, which would
-    #    leave no margin at all for a failed retry.
+    # 4) THE YOUTUBE API QUOTA, NOT GITHUB MINUTES.
+    #    Actions minutes are unlimited on a public repo, but the YouTube Data
+    #    API still allows 10,000 units/day and videos.insert costs 1,600 - a hard
+    #    ceiling of 6 uploads per day.
+    #
+    #    The quota resets at midnight PACIFIC (07:00 UTC), NOT at UTC midnight.
+    #    That boundary falls between two of these crons, which is easy to get
+    #    wrong: 00:25 and 06:40 UTC land BEFORE 07:00, so they belong to the
+    #    PREVIOUS quota day. Each quota day therefore contains:
+    #        12:25, 14:25, 15:55 (day D) + 00:25, 06:40 (day D+1) = 5 reels
+    #        5 x 1,650 = 8,250 units, leaving room for a retry.
+    #
+    #    The 12:25 slot is skipped on long-form days (Mon/Wed/Fri) for two
+    #    reasons: it would push that quota day to 9,900 units with no retry
+    #    margin, and it publishes at 19:15 IST - only ~75 minutes before the
+    #    long-form video at 20:30 IST - so the two would split the same audience.
+    #    Weekly totals: 32 reels + 3 long-form.
     # ---------------------------------------------------------------------
-    # --- MORNING PUJA ---
-    - cron: "25 0 * * *"          # -> publish ~7:15 AM IST
-    - cron: "55 1 * * *"          # -> publish ~8:45 AM IST
+    # --- MORNING PUJA (6:00 - 8:00 AM IST) ---
+    - cron: "25 0 * * *"         # -> ~07:15 IST
     # --- LUNCH ---
-    - cron: "40 6 * * *"          # -> publish ~1:30 PM IST
-    # --- NIGHT PRIME ---
-    # This slot is skipped on Mon/Wed/Fri: the long-form katha publishes at
-    # ~9:20 PM IST on those days, and a reel half an hour ahead of it would split
-    # the same audience. Skipping it also keeps the quota at 8,250 units.
-    - cron: "55 13 * * 0,2,4,6"   # -> publish ~8:45 PM IST
-    - cron: "40 15 * * *"         # -> publish ~10:30 PM IST
+    - cron: "40 6 * * *"         # -> ~13:30 IST
+    # --- SANDHYA AARTI (skipped Mon/Wed/Fri - see quota note above) ---
+    - cron: "25 12 * * 0,2,4,6"  # -> ~19:15 IST
+    # --- NIGHT PEAK (the strongest window for YouTube India) ---
+    - cron: "25 14 * * *"        # -> ~21:15 IST
+    # --- LATE NIGHT (bed scroll) ---
+    - cron: "55 15 * * *"        # -> ~22:45 IST
   workflow_dispatch:
     inputs:
       diagnose_only:
@@ -94,6 +109,17 @@ on:
         description: "Upload generated reels to YouTube"
         required: false
         default: "true"
+      privacy:
+        description: "Privacy for THIS run's uploads. Use 'unlisted' for a first
+          test you want on YouTube but not in front of subscribers, then flip it
+          in Studio once you have watched it. Scheduled runs always use 'public'."
+        required: false
+        default: "public"
+        type: choice
+        options:
+          - public
+          - unlisted
+          - private
       upload_instagram:
         description: "Upload to Instagram (risky, off by default)"
         required: false
@@ -183,46 +209,101 @@ jobs:
         if: ${{ github.event.inputs.diagnose_only != 'true' }}
         run: |
           sudo apt-get update
-          # fonts-noto-devanagari is REQUIRED, not cosmetic: DejaVu has no Devanagari
-          # glyphs, so without it every Hindi hook/flash/thumbnail headline would
-          # render as empty boxes. See modules/textrender.py.
-          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core \
-                                  fonts-noto-devanagari fonts-lohit-deva
-          echo '--- Devanagari fonts present ---'
-          fc-list 2>/dev/null | grep -i devanagari | head -5 || ls -1 /usr/share/fonts/truetype/noto/ | grep -i devanagari | head -5
+          sudo apt-get install -y ffmpeg imagemagick fonts-dejavu-core fontconfig
+
+          # DEVANAGARI FONT. Without one, every Hindi word on screen renders as an
+          # empty box - and nothing raises an error, so a broken reel would be
+          # published as a "success".
+          #
+          # Package names are NOT reliable here. An earlier version of this step
+          # installed `fonts-noto-devanagari`, which does not exist as an Ubuntu
+          # package, and the whole run died with exit code 100. Which package
+          # actually ships Noto's Devanagari faces (fonts-noto-core,
+          # fonts-noto-extra, fonts-indic, ...) also moves between releases.
+          #
+          # So: try several candidates INDIVIDUALLY, each allowed to fail, then
+          # verify by asking fontconfig what is actually installed. If none of
+          # them provided a Hindi font, download Noto Sans Devanagari directly -
+          # that removes the dependency on package naming entirely.
+          for pkg in fonts-noto-core fonts-indic fonts-lohit-deva \
+                     fonts-samyak-deva fonts-deva fonts-noto-extra ; do
+            sudo apt-get install -y "$pkg" 2>/dev/null \
+              && echo "installed: $pkg" \
+              || echo "not available on this release, skipping: $pkg"
+          done
+
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "No Hindi-capable font from apt - fetching Noto Sans Devanagari directly."
+            sudo mkdir -p /usr/share/fonts/truetype/krishna
+            for url in \
+              "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansDevanagari/hinted/ttf/NotoSansDevanagari-Bold.ttf" \
+              "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf" ; do
+              if sudo curl -fsSL --retry 3 --max-time 60 -o \
+                   /usr/share/fonts/truetype/krishna/NotoSansDevanagari-Bold.ttf "$url" ; then
+                echo "downloaded from: $url"
+                break
+              fi
+            done
+            sudo fc-cache -f >/dev/null 2>&1 || true
+          fi
           POLICY="/etc/ImageMagick-6/policy.xml"
           if [ -f "$POLICY" ]; then
             sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' "$POLICY" || true
             sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"\/>//' "$POLICY" || true
           fi
 
-      - name: Download royalty-free music tracks
+      - name: Verify a Devanagari font is installed
+        if: ${{ github.event.inputs.diagnose_only != 'true' }}
+        run: |
+          # HARD FAILURE on purpose. Every other missing dependency in this
+          # pipeline degrades gracefully, but a missing Devanagari font does not:
+          # Pillow silently substitutes blank glyphs, so the run would "succeed"
+          # and publish a Hindi reel whose on-screen text and thumbnail caption
+          # are rows of empty boxes. Better to stop here than upload that.
+          #
+          # The check asks FONTCONFIG rather than testing hard-coded paths, so it
+          # cannot be defeated by a distro moving the install location.
+          echo "Hindi-capable fonts fontconfig can see:"
+          fc-list ":lang=hi" family file 2>/dev/null | head -20 || true
+          if ! fc-list ":lang=hi" 2>/dev/null | grep -q . ; then
+            echo "::error::No Devanagari font on this runner. Hindi text would render as empty boxes."
+            echo "Tried: fonts-noto-core, fonts-indic, fonts-lohit-deva, fonts-samyak-deva,"
+            echo "fonts-deva, fonts-noto-extra, and a direct download. All failed."
+            exit 1
+          fi
+          echo "fontconfig reports a Hindi font is present."
+
+      - name: Prepare background music
         if: ${{ github.event.inputs.diagnose_only != 'true' }}
         run: |
           mkdir -p assets/music
-          SUCCESS=0
-          download_track() {
-            local fname="$1" url="$2" dest="assets/music/$1"
-            curl -fsSL -A "Mozilla/5.0" --max-time 60 -o "$dest" "$url" 2>/dev/null || { rm -f "$dest"; echo "SKIP $fname"; return 1; }
-            local size; size=$(stat -c%s "$dest" 2>/dev/null || echo 0)
-            if [ "$size" -le 20000 ]; then rm -f "$dest"; echo "SKIP $fname (too small)"; return 1; fi
-            if head -c 32 "$dest" | grep -qiE "<!doctype|<html|<\?xml"; then
-              rm -f "$dest"; echo "SKIP $fname (not audio)"; return 1
-            fi
-            echo "OK $fname"; return 0
-          }
-          download_track "01_happy_ukulele.mp3"  "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bda.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "02_uplifting_pop.mp3"  "https://cdn.pixabay.com/download/audio/2022/03/24/audio_2cba25c436.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "03_feel_good.mp3"      "https://cdn.pixabay.com/download/audio/2022/10/30/audio_c8f4bb65b0.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "04_sunny_day.mp3"      "https://cdn.pixabay.com/download/audio/2023/02/28/audio_bb6f9a5552.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "05_cheerful.mp3"       "https://cdn.pixabay.com/download/audio/2022/08/31/audio_1c9e73e5cf.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "06_positive_vibes.mp3" "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "07_kids_joy.mp3"       "https://cdn.pixabay.com/download/audio/2023/01/16/audio_8b576799c1.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "08_sweet_moments.mp3"  "https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          download_track "09_warm_heart.mp3"     "https://cdn.pixabay.com/download/audio/2021/08/08/audio_dc39bde6cf.mp3"  && SUCCESS=$((SUCCESS+1)) || true
-          echo "Music ready: $SUCCESS / 9 tracks"
-          if [ "$SUCCESS" -le 1 ]; then echo "WARNING: <=1 track downloaded -> reels would repeat the same music. Check these Pixabay links."; fi
-          ls -la assets/music/
+          # WHY THERE ARE NO DOWNLOADS HERE ANY MORE
+          #
+          # This step used to pull nine hard-coded Pixabay tracks named
+          # 01_happy_ukulele, 02_uplifting_pop, 07_kids_joy and so on. Those were
+          # chosen for a cute-pets channel. Under a Hindi Krishna katha they are
+          # actively wrong - a cheerful ukulele loop under the story of Gandhari's
+          # curse is the kind of mismatch a viewer feels in the first two seconds.
+          #
+          # They are not replaced with "devotional" URLs because a hard-coded CDN
+          # link cannot be verified from here, and a link that silently starts
+          # serving the wrong track (or a 404 HTML page) is worse than no link.
+          # Instead the pipeline falls back to modules/video_composer's
+          # _synth_background_music, which was rewritten to generate a tanpura
+          # drone with a slow bansuri line in a pentatonic raga - correct for this
+          # niche and impossible to get a copyright claim on.
+          #
+          # TO USE REAL MUSIC: commit your own royalty-free devotional tracks
+          # (bansuri / sitar / tanpura, instrumental only) into assets/music/ as
+          # .mp3. .gitignore already allows assets/music/*.mp3. Anything found
+          # there overrides the synth automatically - see _find_music_track().
+          COUNT=$(ls -1 assets/music/*.mp3 2>/dev/null | wc -l)
+          echo "Real music tracks found in assets/music: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No .mp3 tracks committed -> using the synthesized devotional drone."
+          else
+            ls -la assets/music/*.mp3
+          fi
 
       - name: Install Python dependencies
         if: ${{ github.event.inputs.diagnose_only != 'true' }}
@@ -237,9 +318,19 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "days=1" >> "$GITHUB_OUTPUT"
             echo "per_day=1" >> "$GITHUB_OUTPUT"
+            # A scheduled run is the channel operating normally - always public.
+            echo "privacy=public" >> "$GITHUB_OUTPUT"
           else
             echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
             echo "per_day=${{ github.event.inputs.per_day }}" >> "$GITHUB_OUTPUT"
+            # Whitelisted rather than passed through. The value goes to the
+            # YouTube API, which rejects anything outside these three and fails
+            # the whole upload - so an accidental typo would cost the render.
+            case "${{ github.event.inputs.privacy }}" in
+              unlisted) echo "privacy=unlisted" >> "$GITHUB_OUTPUT" ;;
+              private)  echo "privacy=private"  >> "$GITHUB_OUTPUT" ;;
+              *)        echo "privacy=public"   >> "$GITHUB_OUTPUT" ;;
+            esac
           fi
 
       - name: Generate reel(s)
@@ -273,7 +364,9 @@ jobs:
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
         run: |
-          python upload_youtube.py --limit "${{ steps.params.outputs.per_day }}" --privacy public
+          echo "Uploading with privacy: ${{ steps.params.outputs.privacy }}"
+          python upload_youtube.py --limit "${{ steps.params.outputs.per_day }}" \
+            --privacy "${{ steps.params.outputs.privacy }}"
 
       - name: Upload to Instagram (optional)
         if: ${{ github.event.inputs.diagnose_only != 'true' && github.event.inputs.selftest != 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_instagram == 'true' }}

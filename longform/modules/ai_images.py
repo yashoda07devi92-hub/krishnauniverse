@@ -25,7 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as
 
 from .config import IMAGES_DIR, get_cfg, get_env
 
-log = logging.getLogger("krishnakatha.aiimages")
+log = logging.getLogger("krishna.aiimages")
 
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/"
 
@@ -70,12 +70,15 @@ def _clear_old_images():
 
 def _fetch_one(requests, prompt, dest, width, height, seed):
     full = (
-        f"{get_cfg('ai_images.style', 'soft warm childrens storybook illustration, gentle cartoon style, wholesome, no text, no words')}, "
+        # Fallback style must match the channel. The storybook-cartoon default
+        # this replaced would have rendered Krishna as a children's cartoon if
+        # ai_images.style were ever missing from config.json.
+        f"{get_cfg('ai_images.style', 'cinematic indian mythological art, dramatic warm lighting, saffron and deep blue palette, volumetric god rays, painterly, devotional, no text, no letters')}, "
         f"{prompt}"
     )
     url = POLLINATIONS_URL + urllib.parse.quote(full)
     params = {"width": width, "height": height, "nologo": "true", "seed": seed,
-              "model": get_cfg("ai_images.model", "flux"), "referrer": "krishnakatha"}
+              "model": get_cfg("ai_images.model", "flux"), "referrer": "krishna"}
     # A FREE Pollinations API token (sign up at pollinations.ai) hugely reduces
     # 429 rate-limiting, so most/all scene images succeed -> proper per-scene
     # character visuals. Without it we still try (and fall back to footage).

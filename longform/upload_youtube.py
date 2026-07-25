@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Upload generated KrishnaKatha episodes to YouTube.
+Upload generated Krishna Universe episodes to YouTube.
 
 Reads manifest.json and uploads any episode not yet marked uploaded_youtube.
 Each successful upload (and its thumbnail) is recorded back into the manifest.
@@ -20,7 +20,7 @@ import sys
 from modules.config import BASE_DIR, setup_logging
 from modules import youtube
 
-log = logging.getLogger("krishnakatha.upload")
+log = logging.getLogger("krishna.upload")
 
 MANIFEST_PATH = os.path.join(str(BASE_DIR), "manifest.json")
 
@@ -50,7 +50,10 @@ def _abs(path):
     return path if os.path.isabs(path) else os.path.join(str(BASE_DIR), path)
 
 
-def run(limit=None):
+def run(limit=None, privacy=None):
+    # `privacy` is threaded through so a FIRST upload can be published unlisted
+    # and reviewed on YouTube before it reaches subscribers. None means "use
+    # config.json youtube.privacy_status", which is what scheduled runs do.
     manifest = _load_manifest()
     pending = [e for e in manifest["episodes"] if not e.get("uploaded_youtube")]
     if not pending:
@@ -69,10 +72,11 @@ def run(limit=None):
         # raw story fields so pre-existing manifest entries still upload.
         vid = youtube.upload_video(
             video_path=video_path,
-            title=entry.get("youtube_title") or entry.get("title", "A Moral Story"),
+            title=entry.get("youtube_title") or entry.get("title", "श्रीकृष्ण की एक कथा"),
             description=entry.get("description", ""),
             tags=entry.get("youtube_tags") or entry.get("keywords", []),
             thumbnail_path=_abs(entry.get("thumbnail_path")),
+            privacy=privacy,
         )
         if vid:
             entry["uploaded_youtube"] = True
@@ -87,16 +91,22 @@ def run(limit=None):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Upload KrishnaKatha episodes to YouTube.")
+    parser = argparse.ArgumentParser(description="Upload Krishna Universe episodes to YouTube.")
     parser.add_argument("--authorize", action="store_true", help="Run one-time local OAuth flow.")
     parser.add_argument("--limit", type=int, default=None, help="Max episodes to upload now.")
+    parser.add_argument(
+        "--privacy", choices=("public", "unlisted", "private"), default=None,
+        help="Override config.json youtube.privacy_status for this run only. "
+             "Use 'unlisted' for a first katha you want to watch on YouTube "
+             "before it reaches subscribers.",
+    )
     args = parser.parse_args(argv)
 
     setup_logging()
     if args.authorize:
         youtube.authorize()
         return 0
-    return run(limit=args.limit)
+    return run(limit=args.limit, privacy=args.privacy)
 
 
 if __name__ == "__main__":

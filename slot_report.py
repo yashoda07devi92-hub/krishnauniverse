@@ -2,11 +2,15 @@
 """
 Which upload slot is actually working? Answer it with data, not guesses.
 
-The reel workflow posts at 4 fixed times a day, and a 5th slot was removed at
-some point because it "got almost no views". That decision was made by eye. This
-script reads the real numbers off the channel and groups every published video by
-the hour it went live (in US Eastern, since that is the target audience), so the
-slots can be compared properly.
+The reel workflow posts at 5 fixed times a day, aimed at India prime time. Which
+of those slots actually earns views is a question worth answering with numbers
+rather than by eye. This script reads the real figures off the channel and groups
+every published video by the hour it went live IN IST - the audience's own clock,
+not UTC - so the slots can be compared properly.
+
+It is also the only honest way to check the ~80 minute Actions queue lead the
+crons are built around: this reports the hour a video ACTUALLY went live, so the
+lead can be corrected from measurement instead of re-guessed.
 
 It also splits Shorts from long-form, because they are distributed completely
 differently and averaging them together hides the answer.
@@ -48,7 +52,7 @@ import retitle_existing as manage
 
 log = logging.getLogger("krishna.slots")
 
-TARGET_TZ = "America/New_York"  # the audience the channel is written for
+TARGET_TZ = "Asia/Kolkata"  # the audience the channel is written for
 
 # YouTube treats a video as a Short based on aspect ratio and length; the API
 # does not expose a clean flag, so duration is used as the practical proxy.
@@ -56,16 +60,21 @@ SHORT_MAX_SECONDS = 180
 
 
 def _target_zone():
-    """US Eastern with correct DST handling, falling back to a fixed offset."""
+    """India Standard Time.
+
+    The fixed-offset fallback is exact here, unlike the US Eastern version this
+    replaced: India has no daylight saving, so UTC+5:30 is correct year-round and
+    a missing zoneinfo database cannot skew the report by an hour.
+    """
     try:
         from zoneinfo import ZoneInfo
 
         return ZoneInfo(TARGET_TZ)
     except Exception as exc:
-        log.warning("zoneinfo unavailable (%s); falling back to fixed UTC-4.", exc)
+        log.warning("zoneinfo unavailable (%s); using fixed UTC+5:30 (exact for IST).", exc)
         from datetime import timedelta
 
-        return timezone(timedelta(hours=-4))
+        return timezone(timedelta(hours=5, minutes=30))
 
 
 def _parse_iso(value):
@@ -165,7 +174,7 @@ def print_report(buckets, detail=False):
 
     print()
     print("=" * 78)
-    print(f"{'Publish hour (US Eastern)':<28}{'videos':>7}{'median':>9}{'mean':>9}{'best':>9}{'vs all':>10}")
+    print(f"{'Publish hour (IST)':<28}{'videos':>7}{'median':>9}{'mean':>9}{'best':>9}{'vs all':>10}")
     print("-" * 78)
     for hour in sorted(buckets):
         items = buckets[hour]

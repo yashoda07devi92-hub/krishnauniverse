@@ -1,5 +1,5 @@
 # ============================================================================
-# Krishna Universe - Python dependencies
+# SweetSoul Stories - Python dependencies
 # FREE + open-source tools only. Pinned for reproducible CI builds.
 # ============================================================================
 

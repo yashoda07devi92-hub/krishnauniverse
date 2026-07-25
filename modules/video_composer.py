@@ -54,16 +54,23 @@ FPS = get_cfg("video.fps", 30)
 # ==========================================================================
 # Background construction
 # ==========================================================================
-def _fit_cover(clip):
-    """Resize+crop a clip so it covers the full WxH frame (no letterboxing)."""
+def _fit_cover(clip, target_w=None, target_h=None):
+    """Resize+crop a clip so it covers the target frame (no letterboxing).
+
+    target_w/target_h default to the output frame. The motion engine passes a
+    deliberately LARGER target so there is spare image to pan across.
+    """
     from moviepy.video.fx.all import crop
+
+    tw = int(target_w or W)
+    th = int(target_h or H)
 
     try:
         cw, ch = clip.size
     except Exception:
-        return clip.resize((W, H))
+        return clip.resize((tw, th))
 
-    scale = max(W / float(cw), H / float(ch))
+    scale = max(tw / float(cw), th / float(ch))
     new_w = int(cw * scale)
     new_h = int(ch * scale)
     # Force EVEN dimensions. Odd width/height encoded as yuv420p (chroma
@@ -73,9 +80,9 @@ def _fit_cover(clip):
     new_h += new_h % 2
     clip = clip.resize((new_w, new_h))
     try:
-        clip = crop(clip, width=W, height=H, x_center=new_w / 2, y_center=new_h / 2)
+        clip = crop(clip, width=tw, height=th, x_center=new_w / 2, y_center=new_h / 2)
     except Exception:
-        clip = clip.resize((W, H))
+        clip = clip.resize((tw, th))
     return clip
 
 
@@ -126,156 +133,114 @@ def _concat_with_crossfade(segments, duration):
     return bg
 
 
-# ==========================================================================
-# Motion engine
-# ==========================================================================
-# The channel this was ported from used real Pexels VIDEO for its background, so
-# motion came for free. Krishna has no stock footage, so the frames here are
-# generated stills -- and a sequence of stills with one identical slow zoom is a
-# slideshow, which is exactly what we were asked not to ship.
-#
-# So instead of one fixed zoom, every frame gets a DIFFERENT camera move drawn
-# without repetition inside a reel: push in, pull out, pan either way, tilt
-# either way, or a diagonal drift. Combined with short cuts and real atmosphere
-# footage spliced between the stills (see _mixed_background), the result reads as
-# edited footage rather than a photo gallery.
-#
-# Performance note: a per-frame `resize` is by far the most expensive thing in
-# the whole render, because every output frame resamples an oversized image.
-# Pans/tilts/drifts therefore run at a CONSTANT scale and only move the position,
-# which needs no resampling at all. Only the two zoom moves pay for resize, and
-# MOVE_WEIGHTS keeps those in the minority.
+# The camera moves available to the motion engine. A single slow centre zoom -
+# what the parent pipeline used for every image - is exactly what reads as a
+# slideshow: the eye recognises the same move repeating and stops believing the
+# frame is real. Rotating through translations and zooms, with a different one
+# per scene, is what mythology channels use to make stills feel filmed.
 _MOVES = (
-    "pan_right", "pan_left", "tilt_down", "tilt_up",
-    "drift_in", "drift_out", "push_in", "pull_out",
+    "push_in", "pull_out",
+    "pan_left", "pan_right",
+    "tilt_up", "tilt_down",
+    "diag_ul", "diag_dr",
+    "pan_zoom_left", "pan_zoom_right",
 )
-# Anchor travel expressed as a fraction of the available overscan, start -> end.
-_MOVE_ANCHORS = {
-    "pan_right": ((0.0, 0.5), (1.0, 0.5)),
-    "pan_left": ((1.0, 0.5), (0.0, 0.5)),
-    "tilt_down": ((0.5, 0.0), (0.5, 1.0)),
-    "tilt_up": ((0.5, 1.0), (0.5, 0.0)),
-    "drift_in": ((0.15, 0.15), (0.85, 0.85)),
-    "drift_out": ((0.85, 0.2), (0.15, 0.8)),
-    "push_in": ((0.5, 0.5), (0.5, 0.5)),
-    "pull_out": ((0.5, 0.5), (0.5, 0.5)),
-}
-_ZOOM_MOVES = {"push_in", "pull_out"}
-# Cheap moves are deliberately more likely; see the performance note above.
-_MOVE_WEIGHTS = {
-    "pan_right": 3, "pan_left": 3, "tilt_down": 2, "tilt_up": 2,
-    "drift_in": 3, "drift_out": 3, "push_in": 2, "pull_out": 1,
-}
-
-
-def _fit_cover_to(clip, target_w, target_h):
-    """Resize+crop so the clip covers target_w x target_h with no letterboxing."""
-    from moviepy.video.fx.all import crop
-
-    try:
-        cw, ch = clip.size
-    except Exception:
-        return clip.resize((target_w, target_h))
-
-    scale = max(target_w / float(cw), target_h / float(ch))
-    new_w = int(cw * scale)
-    new_h = int(ch * scale)
-    # Force EVEN dimensions: odd sizes encoded as yuv420p are a classic cause of
-    # coloured fringing along the edges.
-    new_w += new_w % 2
-    new_h += new_h % 2
-    clip = clip.resize((new_w, new_h))
-    try:
-        clip = crop(clip, width=target_w, height=target_h,
-                    x_center=new_w / 2, y_center=new_h / 2)
-    except Exception:
-        clip = clip.resize((target_w, target_h))
-    return clip
-
-
-def _pick_moves(count):
-    """Draw `count` camera moves, weighted, without repeating back-to-back."""
-    bag = []
-    for move in _MOVES:
-        bag.extend([move] * _MOVE_WEIGHTS.get(move, 1))
-    chosen = []
-    last = None
-    for _ in range(max(0, count)):
-        options = [m for m in bag if m != last] or bag
-        move = random.choice(options)
-        chosen.append(move)
-        last = move
-    return chosen
-
-
-def _ease(frac):
-    """Smoothstep. A linear pan starts and stops abruptly and reads as a slide
-    transition; easing in and out reads as a camera operator."""
-    f = min(1.0, max(0.0, float(frac)))
-    return f * f * (3.0 - 2.0 * f)
 
 
 def _motion_from_image(path, duration, move=None):
-    """Turn a still frame into a moving shot. Returns a W x H clip."""
-    from moviepy.editor import ImageClip, CompositeVideoClip
+    """Animate a still with a real camera move. Returns a WxH clip.
+
+    HOW IT WORKS
+    ------------
+    The image is first fitted to an OVERSCANNED frame (default 1.28x), which
+    leaves spare pixels outside the visible area. The clip is then translated
+    inside a WxH composite, so pixels genuinely move across the frame rather
+    than just scaling about the centre.
+
+    Pure translations (pan/tilt/diagonal) deliberately skip moviepy's per-frame
+    `resize`, which resamples the full 1382x2458 image on every one of ~54 frames
+    and is by far the most expensive thing in the render. Only the zoom moves pay
+    that cost, so most segments are cheap.
+    """
+    from moviepy.editor import CompositeVideoClip, ImageClip
 
     if move is None:
-        move = _pick_moves(1)[0]
-    over = float(get_cfg("motion.overscan", 1.30))
-    zoom = float(get_cfg("motion.zoom_amount", 0.12))
-    over = max(1.02, over)
+        move = random.choice(_MOVES)
 
-    base = ImageClip(path).set_duration(duration)
+    over = float(get_cfg("motion.overscan", 1.28))
+    zoom = float(get_cfg("motion.zoom_amount", 0.10))
+    ow = int(W * over)
+    oh = int(H * over)
+    ow += ow % 2
+    oh += oh % 2
 
     try:
-        big_w = int(W * over)
-        big_h = int(H * over)
-        big_w += big_w % 2
-        big_h += big_h % 2
-        base = _fit_cover_to(base, big_w, big_h)
-        bw, bh = base.size
-
-        (ax0, ay0), (ax1, ay1) = _MOVE_ANCHORS.get(move, ((0.5, 0.5), (0.5, 0.5)))
-        if move == "push_in":
-            s0, s1 = 1.0, 1.0 + zoom
-        elif move == "pull_out":
-            s0, s1 = 1.0 + zoom, 1.0
-        else:
-            s0 = s1 = 1.0
-
-        def _anchor(t):
-            f = _ease(t / duration if duration else 0.0)
-            return ax0 + (ax1 - ax0) * f, ay0 + (ay1 - ay0) * f
-
-        if move in _ZOOM_MOVES:
-            def scale(t):
-                f = _ease(t / duration if duration else 0.0)
-                return s0 + (s1 - s0) * f
-
-            def pos(t):
-                s = scale(t)
-                ax, ay = _anchor(t)
-                return (-(bw * s - W) * ax, -(bh * s - H) * ay)
-
-            moving = base.resize(scale).set_position(pos)
-        else:
-            def pos(t):
-                ax, ay = _anchor(t)
-                return (-(bw - W) * ax, -(bh - H) * ay)
-
-            moving = base.set_position(pos)
-
-        shot = CompositeVideoClip([moving], size=(W, H)).set_duration(duration)
-        log.info("  shot: %-10s %.2fs  %s", move, duration, os.path.basename(path))
-        return shot
+        base = ImageClip(path).set_duration(duration)
+        base = _fit_cover(base, ow, oh)
     except Exception as exc:
-        log.warning("Motion shot failed for %s (%s); using static frame.", path, exc)
-        return _fit_cover(ImageClip(path).set_duration(duration))
+        log.warning("Could not load scene image %s (%s).", path, exc)
+        return None
 
+    # Travel room: how far the oversized image can slide before an edge shows.
+    slack_x = max(0, ow - W)
+    slack_y = max(0, oh - H)
+    cx = -slack_x / 2.0
+    cy = -slack_y / 2.0
 
-# Kept under the old name so nothing that still imports it breaks.
-def _ken_burns_from_image(path, duration, zoom_end=None):
-    return _motion_from_image(path, duration)
+    def frac(t):
+        return min(1.0, max(0.0, (t / duration) if duration else 0.0))
+
+    try:
+        if move in ("push_in", "pull_out"):
+            # Scale about the centre. Needs per-frame resize.
+            def scale(t):
+                f = frac(t)
+                if move == "push_in":
+                    return 1.0 + zoom * f
+                return (1.0 + zoom) - zoom * f
+
+            seg = base.resize(scale).set_position(("center", "center"))
+            return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
+
+        if move in ("pan_zoom_left", "pan_zoom_right"):
+            direction = -1.0 if move == "pan_zoom_left" else 1.0
+
+            def scale2(t):
+                return 1.0 + zoom * frac(t)
+
+            def pos2(t):
+                f = frac(t)
+                x = cx + direction * (slack_x / 2.0) * f
+                return (x, cy)
+
+            seg = base.resize(scale2).set_position(pos2)
+            return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
+
+        # Pure translations - no resize, so these are the cheap ones.
+        def pos(t):
+            f = frac(t)
+            if move == "pan_left":
+                return (cx - (slack_x / 2.0) * f, cy)
+            if move == "pan_right":
+                return (cx + (slack_x / 2.0) * f, cy)
+            if move == "tilt_up":
+                return (cx, cy - (slack_y / 2.0) * f)
+            if move == "tilt_down":
+                return (cx, cy + (slack_y / 2.0) * f)
+            if move == "diag_ul":
+                return (cx - (slack_x / 2.0) * f, cy - (slack_y / 2.0) * f)
+            if move == "diag_dr":
+                return (cx + (slack_x / 2.0) * f, cy + (slack_y / 2.0) * f)
+            return (cx, cy)
+
+        seg = base.set_position(pos)
+        return CompositeVideoClip([seg], size=(W, H)).set_duration(duration)
+    except Exception as exc:
+        log.warning("Motion move %r failed for %s (%s); using static frame.", move, path, exc)
+        try:
+            return _fit_cover(ImageClip(path).set_duration(duration))
+        except Exception:
+            return None
 
 
 def _video_background(clip_paths, duration):
@@ -320,126 +285,124 @@ def _video_background(clip_paths, duration):
 
 
 def _images_background(image_paths, duration):
-    """Build a moving background from generated frames covering `duration`.
-
-    Frames are shown IN ORDER (they follow the narration beat by beat), each with
-    its own camera move, joined by short crossfades.
-    """
+    """Animated background built from stills, each with its own camera move."""
     if not image_paths:
         raise RuntimeError("No images for background.")
-    xfade = float(get_cfg("transitions.crossfade_seconds", 0.28))
-    cut = float(get_cfg("video.image_cut_seconds", 3.0))
-    # Spread the available frames across the whole reel rather than using a fixed
-    # cut length: with 5 frames and 24 seconds a fixed 1.8s cut would loop the
-    # same frame four times over.
-    per = max(cut, duration / max(1, len(image_paths)))
+    xfade = float(get_cfg("transitions.crossfade_seconds", 0.25))
+    cut = float(get_cfg("video.scene_cut_seconds", 2.6))
+    per = max(1.4, min(cut, duration / max(1, len(image_paths))))
+
+    # Shuffle the move order so consecutive scenes never share a direction.
+    moves = list(_MOVES)
+    random.shuffle(moves)
+
     clips = []
     total = 0.0
     idx = 0
     guard = 0
-    moves = _pick_moves(max(1, int(duration / max(0.5, per)) + 2))
     while guard < 200:
         effective = total - max(0, len(clips) - 1) * xfade
         if effective >= duration:
             break
-        path = image_paths[idx % len(image_paths)]
-        move = moves[guard % len(moves)]
-        idx += 1
         guard += 1
-        seg_dur = min(per, duration - effective + xfade)
-        if seg_dur <= 0.2:
+        path = image_paths[idx % len(image_paths)]
+        seg_dur = min(per, duration - effective)
+        if seg_dur <= 0.4:
             break
-        try:
-            clips.append(_motion_from_image(path, seg_dur, move))
-            total += seg_dur
-        except Exception as exc:
-            log.warning("Motion shot failed for %s (%s).", path, exc)
+        seg = _motion_from_image(path, seg_dur, move=moves[idx % len(moves)])
+        idx += 1
+        if seg is None:
             continue
+        clips.append(seg)
+        total += seg_dur
     if not clips:
-        raise RuntimeError("No motion shots built.")
+        raise RuntimeError("No motion clips built.")
+    log.info("Scene background: %d animated frame(s), ~%.1fs each.", len(clips), per)
     return _concat_with_crossfade(clips, duration).set_duration(duration)
 
 
 def _mixed_background(image_paths, clip_paths, duration):
-    """Interleave generated Krishna frames with REAL atmosphere footage.
+    """Interleave AI scene frames with REAL atmosphere footage.
 
-    This is the single most important function for making the reel look shot
-    rather than assembled. Generated stills carry the story; real footage of
-    moving water, rain, lamp flame or peacock feathers carries genuine motion,
-    parallax and sensor noise that no still can fake. Cutting between the two
-    every couple of seconds means the eye keeps receiving real movement, so the
-    stills stop registering as stills.
+    This is the single most important function for the "should look like real
+    video, not a slideshow" requirement. Generated frames carry the story, but
+    they are still images however well they are animated. Dropping a genuine
+    moving shot - river water, a peacock, rain on leaves - every few seconds
+    gives the eye real motion to anchor on, and the animated frames around it
+    read as filmed rather than as a photo montage.
 
-    Pattern: two story frames, then one real cutaway, repeating. Story frames
-    stay in narration order; cutaways are the filler, so they may repeat.
+    Pattern is `motion.real_every` AI frames, then one real clip, repeating.
+    Falls back to whichever source is available if the other is empty.
     """
     from moviepy.editor import VideoFileClip
 
-    if not image_paths or not clip_paths:
-        raise RuntimeError("Mixed background needs both images and clips.")
+    if not image_paths and not clip_paths:
+        raise RuntimeError("No sources for mixed background.")
+    if not clip_paths:
+        return _images_background(image_paths, duration)
+    if not image_paths:
+        return _video_background(clip_paths, duration)
 
-    xfade = float(get_cfg("transitions.crossfade_seconds", 0.28))
-    img_cut = float(get_cfg("video.image_cut_seconds", 3.0))
-    vid_cut = float(get_cfg("video.clip_cut_seconds", 1.8))
-    per_cutaway = max(1, int(get_cfg("motion.frames_per_cutaway", 2)))
+    xfade = float(get_cfg("transitions.crossfade_seconds", 0.25))
+    scene_cut = float(get_cfg("video.scene_cut_seconds", 2.6))
+    real_cut = float(get_cfg("video.clip_cut_seconds", 1.6))
+    every = max(1, int(get_cfg("motion.real_every", 2)))
 
-    moves = _pick_moves(len(image_paths) * 3 + 6)
+    moves = list(_MOVES)
+    random.shuffle(moves)
+
     segments = []
     total = 0.0
     img_i = 0
-    vid_i = 0
-    move_i = 0
-    placed_since_cutaway = 0
+    clip_i = 0
+    placed_since_real = 0
     guard = 0
 
-    while guard < 200:
+    while guard < 300:
         effective = total - max(0, len(segments) - 1) * xfade
-        if effective >= duration:
+        remaining = duration - effective
+        if remaining <= 0.4:
             break
         guard += 1
-        remaining = duration - effective + xfade
 
-        use_cutaway = placed_since_cutaway >= per_cutaway
-        if use_cutaway:
-            seg_dur = min(vid_cut, remaining)
-            if seg_dur <= 0.4:
-                break
-            path = clip_paths[vid_i % len(clip_paths)]
-            vid_i += 1
-            placed_since_cutaway = 0
+        use_real = placed_since_real >= every
+        if use_real:
+            path = clip_paths[clip_i % len(clip_paths)]
+            clip_i += 1
+            seg_dur = min(real_cut, remaining)
             try:
                 vc = VideoFileClip(path, audio=False)
-                take = min(seg_dur, vc.duration or seg_dur)
-                if take <= 0.2:
+                seg_dur = min(seg_dur, vc.duration or seg_dur)
+                if seg_dur <= 0.3:
                     vc.close()
+                    placed_since_real = 0
                     continue
-                seg = _fit_cover(vc.subclip(0, take))
+                seg = _fit_cover(vc.subclip(0, seg_dur))
                 segments.append(seg)
-                total += take
-                log.info("  shot: real       %.2fs  %s", take, os.path.basename(path))
-            except Exception as exc:
-                log.warning("Could not use cutaway %s (%s).", path, exc)
-                continue
-        else:
-            seg_dur = min(img_cut, remaining)
-            if seg_dur <= 0.4:
-                break
-            path = image_paths[img_i % len(image_paths)]
-            img_i += 1
-            placed_since_cutaway += 1
-            move = moves[move_i % len(moves)]
-            move_i += 1
-            try:
-                segments.append(_motion_from_image(path, seg_dur, move))
                 total += seg_dur
+                placed_since_real = 0
+                continue
             except Exception as exc:
-                log.warning("Motion shot failed for %s (%s).", path, exc)
+                log.warning("Could not use atmosphere clip %s (%s).", path, exc)
+                placed_since_real = 0
                 continue
 
+        path = image_paths[img_i % len(image_paths)]
+        seg_dur = min(scene_cut, remaining)
+        seg = _motion_from_image(path, seg_dur, move=moves[img_i % len(moves)])
+        img_i += 1
+        if seg is None:
+            continue
+        segments.append(seg)
+        total += seg_dur
+        placed_since_real += 1
+
     if not segments:
-        raise RuntimeError("No mixed segments built.")
-    log.info("Mixed background: %d segment(s) from %d frame(s) + %d cutaway clip(s).",
-             len(segments), len(image_paths), len(clip_paths))
+        raise RuntimeError("Mixed background produced no segments.")
+    log.info(
+        "Mixed background: %d segment(s) - %d AI scene frame(s) + %d real atmosphere shot(s).",
+        len(segments), img_i, clip_i,
+    )
     return _concat_with_crossfade(segments, duration).set_duration(duration)
 
 
@@ -479,79 +442,73 @@ def _warm_gradient_background(duration):
 
 
 def _build_background(keywords, duration, scene_prompts=None):
-    """Background priority chain, loudest-first logging at every step.
-
-    The order is inverted from the channel this was ported from. There, real
-    Pexels footage came first because the subject (a puppy, a baby) genuinely
-    exists in stock libraries. Here the subject is Krishna, who does not, so a
-    Pexels-first chain would produce reels full of unrelated stock people. The
-    generated frames therefore lead, and real footage is demoted to atmosphere
-    cutaways spliced between them.
+    """Background priority chain, rebuilt for a mythology channel.
 
     Chain:
-      (0) generated frames + real atmosphere footage  <- the intended result
-      (1) generated frames only (motion engine)
-      (2) real atmosphere footage only  (no Krishna in frame -- degraded)
-      (3) warm animated gradient        (last resort, always works)
+      (1) AI scene frames + real atmosphere footage, interleaved  <- the goal
+      (2) AI scene frames alone, each with its own camera move
+      (3) Real atmosphere footage alone
+      (4) Pexels photos, animated
+      (5) Warm gradient (always works)
+
+    The parent pipeline led with a Pexels VIDEO search on the story keywords.
+    That is inverted here: searching stock video for "krishna lifting govardhan"
+    returns nothing relevant, so generated scenes lead and real footage is
+    demoted to atmosphere.
     """
-    image_paths = []
-    if get_cfg("ai_images.enabled", True) and scene_prompts:
+    scenes = []
+    if scene_prompts:
         try:
-            image_paths = ai_images.generate_scene_images(scene_prompts)
+            scenes = ai_images.generate_scene_images(scene_prompts)
         except Exception as exc:
-            log.warning("AI frame generation errored (%s).", exc)
-            image_paths = []
+            log.warning("Scene image generation errored (%s).", exc)
+            scenes = []
 
-    clip_paths = []
+    atmosphere = []
     try:
-        clip_paths = pexels_video.fetch_pexels_videos(keywords) or []
+        atmosphere = pexels_video.fetch_pexels_videos(keywords) or []
     except Exception as exc:
-        log.warning("Pexels video fetch error (%s).", exc)
-        clip_paths = []
+        log.warning("Atmosphere footage fetch error (%s).", exc)
 
-    # (0) Both -> the intended look.
-    if image_paths and clip_paths:
-        log.info("Background source: MIXED %d generated frame(s) + %d real cutaway(s).",
-                 len(image_paths), len(clip_paths))
+    # (1) The intended path: story frames with real motion cut between them.
+    if scenes and atmosphere:
+        log.info("Background source: %d AI scene(s) MIXED with %d atmosphere clip(s).",
+                 len(scenes), len(atmosphere))
         try:
-            return _mixed_background(image_paths, clip_paths, duration)
+            return _mixed_background(scenes, atmosphere, duration)
         except Exception as exc:
-            log.warning("Mixed background failed (%s); trying frames only.", exc)
+            log.warning("Mixed background failed (%s); trying scenes only.", exc)
 
-    # (1) Generated frames only.
-    if image_paths:
-        log.info("Background source: generated frames only (%d).", len(image_paths))
+    # (2) Scenes only.
+    if scenes:
+        log.info("Background source: %d AI scene frame(s), animated.", len(scenes))
         try:
-            return _images_background(image_paths, duration)
+            return _images_background(scenes, duration)
         except Exception as exc:
-            log.warning("Frame background failed (%s); trying footage.", exc)
+            log.warning("Scene background failed (%s); trying atmosphere footage.", exc)
 
-    # (2) Real footage only. Note this loudly: the reel will have NO Krishna in
-    # it, which is a content failure even though the render succeeded.
-    if clip_paths:
-        log.error(
-            "No generated frames available - falling back to atmosphere footage "
-            "ONLY. This reel will contain no Krishna imagery. Check "
-            "POLLINATIONS_TOKEN and the ai_images log lines above."
-        )
+    # (3) Atmosphere footage only. The story will not be depicted, but the video
+    # still looks like a devotional reel rather than a coloured rectangle.
+    if atmosphere:
+        log.warning("No AI scenes available; falling back to atmosphere footage only.")
         try:
-            return _video_background(clip_paths, duration)
+            return _video_background(atmosphere, duration)
         except Exception as exc:
-            log.warning("Footage background failed (%s); using gradient.", exc)
+            log.warning("Atmosphere video background failed (%s); trying photos.", exc)
 
-    # (2b) Pexels photos, animated. Better than a flat gradient.
+    # (4) Pexels photos, animated with the same motion engine.
     try:
         photos = images_mod.fetch_pexels_photos(keywords)
         if photos:
-            log.warning("Background source: Pexels PHOTOS with motion (%d).", len(photos))
+            log.warning("Falling back to Pexels PHOTOS (%d), animated.", len(photos))
             try:
                 return _images_background(photos, duration)
             except Exception as exc:
-                log.warning("Photo background failed (%s); using gradient.", exc)
+                log.warning("Photo background build failed (%s); using gradient.", exc)
     except Exception as exc:
         log.warning("Pexels photo fetch error (%s); using gradient.", exc)
 
-    # (3) Gradient (always works).
+    # (5) Gradient last resort.
     return _warm_gradient_background(duration)
 
 
@@ -611,48 +568,30 @@ def _build_cinematic_grade(duration):
 # ==========================================================================
 def _make_text_clip(txt, fontsize, color, stroke_color, stroke_width, font, max_w,
                     duration=1.0):
-    """Render on-screen text. Returns None if rendering is unavailable.
+    """Render text via Pillow instead of moviepy's TextClip.
 
-    Hindi is rendered through modules/textrender (Pillow + libraqm), NOT through
-    moviepy's TextClip. Two reasons, both of which fail silently and would ship
-    broken video:
-      * ImageMagick's default font here is DejaVu Sans, which has no Devanagari
-        glyphs at all -- every Hindi character becomes an empty box.
-      * Even with a Devanagari font, ImageMagick's label/caption path does no
-        text shaping, so matras land in the wrong place and conjuncts never form.
+    WHY NOT TextClip
+    ----------------
+    TextClip shells out to ImageMagick, which fails for Hindi in two ways at
+    once: the configured DejaVu font has no Devanagari glyphs (every word comes
+    out as empty boxes), and ImageMagick's label/caption operators do not run a
+    complex-text shaper, so matras and conjuncts land in the wrong places even
+    with a correct font installed. Neither raises an error - it just renders
+    garbage. modules/textrender uses Pillow, whose wheels bundle libraqm and
+    therefore shape Devanagari properly.
 
-    `font` is accepted and ignored for Devanagari; the font actually used comes
-    from textrender.font_path(). Pure-ASCII strings still go through the same
-    renderer so there is only one text path to reason about.
+    `font` is accepted and ignored so existing call sites need no changes; the
+    real font is resolved by textrender.find_font().
     """
-    clip = textrender.make_clip(
+    return textrender.make_clip(
         txt,
-        duration=max(0.1, float(duration)),
-        fontsize=fontsize,
-        color=color,
-        stroke_color=stroke_color,
-        stroke_width=stroke_width,
-        max_width=max_w,
+        duration=duration,
+        fontsize=int(fontsize),
+        color=textrender.parse_color(color, (255, 255, 255)),
+        stroke_color=textrender.parse_color(stroke_color, (0, 0, 0)),
+        stroke_width=int(stroke_width or 0),
+        max_width=int(max_w),
     )
-    if clip is not None:
-        return clip
-
-    # Last resort for ASCII-only text: try moviepy/ImageMagick. Devanagari is not
-    # attempted here on purpose -- boxes on screen are worse than no text.
-    if textrender.has_devanagari(txt):
-        log.warning("Skipping Hindi text %r: no Devanagari font available.", str(txt)[:30])
-        return None
-    try:
-        from moviepy.editor import TextClip
-
-        return TextClip(
-            txt, fontsize=fontsize, color=color, stroke_color=stroke_color,
-            stroke_width=stroke_width, font=font, method="caption",
-            size=(max_w, None), align="center",
-        )
-    except Exception as exc:
-        log.warning("TextClip fallback failed (%s); skipping text.", exc)
-        return None
 
 
 def _hex_to_rgb(value, default=(0, 0, 0)):
@@ -740,20 +679,21 @@ def _build_caption_clips(text, duration):
     clips = []
     for g in groups:
         words = g["text"].split()
-        is_power = any(w.strip(".,!?;:।").lower() in power_words for w in words)
+        is_power = any(w.strip(".,!?;:").lower() in power_words for w in words)
         use_color = accent if is_power else color
         seg_dur = max(0.2, g["end"] - g["start"])
-        # No .upper() here: Hindi has no case, and upper() on Devanagari is a
-        # no-op that only obscured that this path was ever English-only.
+        # NOTE: no .upper() anywhere in this file any more. Devanagari has no
+        # letter case, so str.upper() was a silent no-op on Hindi text - but it
+        # also meant the code read as if it were shouting, which it never was.
         tc = _make_text_clip(
-            g["text"], fontsize, use_color, stroke_color, stroke_width, font,
-            max_w, duration=seg_dur,
+            g["text"], fontsize, use_color, stroke_color, stroke_width, font, max_w,
+            duration=seg_dur,
         )
         if tc is None:
             continue
         y_top = int(H * y_ratio)
         try:
-            tc = tc.set_start(g["start"]).set_duration(seg_dur)
+            tc = tc.set_start(g["start"])
             tc = tc.set_position(("center", y_top))
         except Exception as exc:
             log.warning("Could not place caption '%s' (%s).", g["text"], exc)
@@ -838,7 +778,7 @@ def _build_flash_clips(flashes, duration, start_after=0.0):
         if tc is None:
             continue
         try:
-            tc = tc.set_start(start).set_duration(seg)
+            tc = tc.set_start(start)
             tc = tc.set_position(("center", int(H * y_ratio)))
             # Soft fade so it reads as a gentle accent, not a hard cut.
             if fade > 0 and seg > fade * 2:
@@ -948,7 +888,6 @@ def _build_hook_clips(hook_text, background):
 
             hook_clip = (
                 hook_clip.set_start(0)
-                .set_duration(hook_dur)
                 .resize(pop)
                 .set_position(("center", "center"))
             )
@@ -987,17 +926,29 @@ def _find_music_track():
 
 
 def _synth_background_music(duration, fps=44100):
-    """Generate an UPLIFTING ANTHEM-style music bed — 4 rotating styles.
+    """Generate a DEVOTIONAL Indian music bed - 4 rotating styles.
 
-    All styles are inspired by feel-good "la la laa" Olympic/viral anthem
-    energy that matches cute pet + baby content perfectly:
+    WHY THIS WAS REWRITTEN
+    ----------------------
+    The version this replaces generated "uplifting anthem" beds - a bright major
+    "la la laa" melody, a celebratory 4-beat march, a viral pop hook and an
+    Olympic-style swell. That suited the cute-pets channel it was written for.
+    Under a Hindi Krishna katha it is actively wrong: a triumphant pop hook
+    playing under the story of Gandhari's curse reads as disrespectful, and it is
+    the kind of mismatch a viewer notices in the first two seconds even if they
+    cannot name it.
 
-      Style 0 — "La La Laa" Anthem : bright ascending melody, triumphant feel
-      Style 1 — Heartwarming March  : bold 4-beat march, warm + celebratory
-      Style 2 — Viral Pop Hook      : catchy repeating 4-note hook, energetic
-      Style 3 — Olympic Swell       : grand rising theme, emotional + epic
+    All four styles below are built on a sustained tanpura-style drone (Sa + Pa)
+    with a slow bansuri-like melody drawn from a pentatonic raga scale. There is
+    no percussion on the downbeat and no rising "anthem" figure, because the
+    narration - not the music - is meant to carry the video.
 
-    Rotates randomly each run. Drop a real .mp3 in assets/music to override.
+      Style 0 - Bansuri over drone      (Raag Bhoopali: Sa Re Ga Pa Dha)
+      Style 1 - Temple morning          (drone + soft distant bell strikes)
+      Style 2 - Sandhya aarti           (deeper drone, slow sustained melody)
+      Style 3 - Meditative drone        (almost no melody, gentle swells)
+
+    Drop real .mp3 files in assets/music to override this entirely.
     """
     try:
         import numpy as np
@@ -1007,95 +958,80 @@ def _synth_background_music(duration, fps=44100):
         n = int(duration * fps)
         t = np.linspace(0.0, duration, n, endpoint=False)
         style = random.randint(0, 3)
-        log.info("Anthem music style: %d", style)
+        log.info("Devotional music style: %d", style)
+
+        # Sa = C3 (low, so it sits under a male narration voice rather than
+        # fighting it). Ratios are just intonation, which is how a tanpura is
+        # actually tuned - equal temperament sounds subtly "off" for this.
+        SA = 130.81
+        RE = SA * 9 / 8
+        GA = SA * 5 / 4
+        MA = SA * 4 / 3
+        PA = SA * 3 / 2
+        DHA = SA * 5 / 3
+        SA_HI = SA * 2
+
+        def drone(amount=0.30):
+            """Tanpura-ish: Sa + Pa + Sa-octave, very slowly beating."""
+            d = np.zeros(n)
+            for freq, gain in ((SA, 1.0), (PA, 0.55), (SA_HI, 0.35)):
+                # Two detuned voices per note give the slow shimmer a real
+                # tanpura has; a single sine sounds like a test tone.
+                d += gain * np.sin(2 * np.pi * freq * t)
+                d += gain * 0.7 * np.sin(2 * np.pi * (freq * 1.0015) * t)
+            # Gentle swell so the bed breathes instead of sitting flat.
+            d *= 0.85 + 0.15 * np.sin(2 * np.pi * t / 7.0)
+            return amount * d / 3.0
+
+        def melody(notes, note_dur, gain=0.30, breath=2.5):
+            """Slow flute-like line: soft attack, long decay, no hard onset."""
+            idx = (t / note_dur).astype(int) % len(notes)
+            freq = np.array([notes[i] for i in idx])
+            phase = (t / note_dur) % 1.0
+            # Soft attack (a flute does not start instantly) + slow decay.
+            attack = np.clip(phase / 0.18, 0.0, 1.0)
+            decay = np.exp(-breath * phase)
+            env = attack * decay
+            # A touch of second harmonic gives it a wooden, airy timbre.
+            w = np.sin(2 * np.pi * freq * t) + 0.25 * np.sin(2 * np.pi * 2 * freq * t)
+            return gain * env * w
+
+        def bells(period=6.0, gain=0.16):
+            """Distant temple bell every `period` seconds."""
+            phase = t % period
+            env = np.exp(-2.2 * phase)
+            b = np.sin(2 * np.pi * 1046.50 * t) + 0.6 * np.sin(2 * np.pi * 1567.98 * t)
+            return gain * env * b
 
         if style == 0:
-            # --- "La La Laa" Anthem: ascending bright melody (C-E-G-A-C) ---
-            # Mimics the iconic happy "la la la" viral anthem feel
-            melody = [261.63, 329.63, 392.00, 440.00, 523.25,  # C E G A C (up)
-                      440.00, 392.00, 329.63, 261.63, 329.63]  # A G E C E (down)
-            note_dur = 0.30
-            note_idx = (t / note_dur).astype(int) % len(melody)
-            freq_arr = np.array([melody[i] for i in note_idx])
-            phase_in = (t / note_dur) % 1.0
-            # Bell-like: quick attack, slow decay
-            env = np.exp(-3.0 * phase_in)
-            wave = 0.55 * env * np.sin(2 * np.pi * freq_arr * t)
-            # Harmony a third below
-            harm = np.array([f * 0.794 for f in freq_arr])
-            wave += 0.3 * env * np.sin(2 * np.pi * harm * t)
-            # Warm bass pulse on beat
-            beat = (t * (1.0 / 0.6)) % 1.0
-            bass_env = np.exp(-8.0 * beat)
-            wave += 0.25 * bass_env * np.sin(2 * np.pi * 130.81 * t)
-
+            # Raag Bhoopali (Sa Re Ga Pa Dha) - the classic evening pentatonic.
+            wave = drone(0.30) + melody(
+                [SA, RE, GA, PA, DHA, PA, GA, RE], 0.85, gain=0.30
+            )
         elif style == 1:
-            # --- Heartwarming March: bold 4-beat, warm + celebratory ---
-            # G-major feel, steady rhythm like happy parade
-            chord_notes = [392.00, 493.88, 587.33]  # G B D
-            wave = np.zeros(n)
-            for freq in chord_notes:
-                wave += (0.4 / len(chord_notes)) * np.sin(2 * np.pi * freq * t)
-            # 4-beat march accent
-            beat4 = (t * 2.0) % 1.0
-            accent = np.exp(-12.0 * beat4)
-            wave *= (0.7 + 0.3 * accent)
-            # Melodic top line
-            top = [392.00, 440.00, 493.88, 523.25, 493.88, 440.00]
-            top_dur = 0.4
-            top_idx = (t / top_dur).astype(int) % len(top)
-            top_freq = np.array([top[i] for i in top_idx])
-            top_env = np.exp(-5.0 * ((t / top_dur) % 1.0))
-            wave += 0.35 * top_env * np.sin(2 * np.pi * top_freq * t)
-
+            wave = drone(0.28) + melody([GA, PA, DHA, SA_HI, DHA, PA], 1.0, gain=0.24)
+            wave += bells(period=6.5)
         elif style == 2:
-            # --- Viral Pop Hook: catchy 4-note loop, high energy ---
-            # Simple iconic hook: C-G-A-F (same chords as many viral songs)
-            hook = [523.25, 392.00, 440.00, 349.23]  # C G A F
-            hook_dur = 0.4
-            h_idx = (t / hook_dur).astype(int) % len(hook)
-            h_freq = np.array([hook[i] for i in h_idx])
-            h_env = np.exp(-4.0 * ((t / hook_dur) % 1.0))
-            wave = 0.6 * h_env * np.sin(2 * np.pi * h_freq * t)
-            # Octave doubling for richness
-            wave += 0.3 * h_env * np.sin(2 * np.pi * h_freq * 2 * t)
-            # Energetic beat (every 0.4s)
-            beat_e = (t / hook_dur) % 1.0
-            kick = 0.35 * np.exp(-15.0 * beat_e) * np.sin(2 * np.pi * 85 * t)
-            wave += kick
-
+            # Slower, lower, more solemn - for the heavier leelas.
+            wave = drone(0.34) + melody([SA, GA, MA, PA, MA, GA], 1.35, gain=0.22, breath=1.6)
         else:
-            # --- Olympic Swell: grand rising anthem, emotional + epic ---
-            # Starts humble, builds to triumphant peak
-            rise = np.clip(t / (duration * 0.7), 0.0, 1.0)
-            # Foundation chord
-            base_notes = [(130.81, 0.45), (196.00, 0.40), (261.63, 0.35)]
-            # Rising melody notes that appear as swell builds
-            high_notes = [(523.25, 0.30), (659.25, 0.25), (783.99, 0.20)]
-            wave = np.zeros(n)
-            for freq, amp in base_notes:
-                wave += amp * np.sin(2 * np.pi * freq * t)
-            for freq, amp in high_notes:
-                wave += amp * rise * np.sin(2 * np.pi * freq * t)
-            # Heroic 8-beat pulse
-            pulse = 0.8 + 0.2 * np.sin(2 * np.pi * t * (120 / 60) * 0.5)
-            wave *= pulse
-            # Dramatic hit at peak
-            hit_t = duration * 0.7
-            hit_mask = np.exp(-20.0 * np.abs(t - hit_t))
-            wave += 0.4 * hit_mask * np.sin(2 * np.pi * 523.25 * t)
+            # Nearly pure drone. The quietest option, and the safest bed under a
+            # narration that is doing all the work.
+            wave = drone(0.38) + melody([SA, PA, SA_HI], 3.0, gain=0.12, breath=1.0)
 
-        # Normalize + fade in/out
+        # Normalise, then fade in/out so the bed never clicks at a cut.
         peak = float(np.max(np.abs(wave))) or 1.0
-        wave /= peak
-        fade_in  = min(int(0.8 * fps), n // 5)
+        wave = wave / peak * 0.9
+        fade_in = min(int(1.2 * fps), n // 4)
         fade_out = min(int(1.5 * fps), n // 4)
-        if fade_in  > 0: wave[:fade_in]   *= np.linspace(0.0, 1.0, fade_in)
-        if fade_out > 0: wave[-fade_out:]  *= np.linspace(1.0, 0.0, fade_out)
+        if fade_in > 0:
+            wave[:fade_in] *= np.linspace(0.0, 1.0, fade_in)
+        if fade_out > 0:
+            wave[-fade_out:] *= np.linspace(1.0, 0.0, fade_out)
 
         stereo = np.column_stack([wave, wave]).astype(np.float32)
         clip = AudioArrayClip(stereo, fps=fps).set_duration(duration)
-        log.info("Synthesized %.1fs anthem music (style %d).", duration, style)
+        log.info("Synthesized %.1fs devotional music (style %d).", duration, style)
         return clip
 
     except Exception as exc:
@@ -1104,11 +1040,20 @@ def _synth_background_music(duration, fps=44100):
 
 
 def _synth_hook_sting(duration=2.5, fps=44100):
-    """Short punchy 'sting' sound for the hook window (first ~4s).
+    """Short devotional accent for the hook window (first ~2.5s).
 
-    A crisp rising impact + bright shimmer — gives the hook text a satisfying
-    'arrival' feel without being loud or jarring. Randomly picks one of two
-    sting flavours each run.
+    WHY THIS WAS REWRITTEN
+    ----------------------
+    The previous sting was a rising "whoosh + chime" or a "low punch + sparkle" -
+    a trailer-style impact. Over the opening of a Krishna katha that sounds like
+    a gaming montage. Replaced with two accents that belong to this niche:
+
+      Flavour 0 - Temple bell (ghanti): a struck bell with its natural
+                  inharmonic partials, ringing out over ~2s.
+      Flavour 1 - Conch (shankh): a breathy sustained tone with a soft swell,
+                  the sound that traditionally opens a recitation.
+
+    Kept quiet and short - it marks the opening, it does not announce it.
     """
     try:
         import numpy as np
@@ -1119,26 +1064,39 @@ def _synth_hook_sting(duration=2.5, fps=44100):
         flavour = random.randint(0, 1)
 
         if flavour == 0:
-            # Rising "whoosh + chime": frequency sweeps up fast, then bright chime rings
-            sweep_dur = 0.25
-            sweep = np.exp(-15.0 * t) * np.sin(2 * np.pi * (200 + 1200 * t / sweep_dur) * t)
-            chime_freq = 1046.50  # C6
-            chime = np.exp(-4.0 * np.maximum(t - 0.2, 0)) * np.sin(2 * np.pi * chime_freq * t)
-            chime2 = 0.5 * np.exp(-5.0 * np.maximum(t - 0.25, 0)) * np.sin(2 * np.pi * 1318.51 * t)
-            wave = 0.5 * sweep + 0.6 * chime + 0.3 * chime2
+            # Temple bell. A real bell's overtones are NOT integer multiples of
+            # the fundamental - that inharmonicity is what makes it read as metal
+            # rather than as a sine beep, so the ratios below are deliberate.
+            fundamental = 523.25
+            partials = ((1.0, 1.0, 3.0), (2.76, 0.5, 4.5), (5.40, 0.25, 6.0),
+                        (8.93, 0.12, 8.0))
+            wave = np.zeros(n)
+            for ratio, gain, decay in partials:
+                wave += gain * np.exp(-decay * t) * np.sin(2 * np.pi * fundamental * ratio * t)
+            # Slow tremolo as the bell body rings.
+            wave *= 1.0 + 0.05 * np.sin(2 * np.pi * 4.5 * t)
         else:
-            # "Punch + sparkle": low thump at start, then high sparkle
-            thump = np.exp(-30.0 * t) * np.sin(2 * np.pi * 90 * t)
-            sparkle_freq = 880.0
-            sparkle = np.exp(-6.0 * np.maximum(t - 0.1, 0)) * np.sin(2 * np.pi * sparkle_freq * t)
-            sparkle2 = 0.4 * np.exp(-8.0 * np.maximum(t - 0.15, 0)) * np.sin(2 * np.pi * 1108.73 * t)
-            wave = 0.7 * thump + 0.5 * sparkle + 0.3 * sparkle2
+            # Conch: a low breathy tone that swells in, plus filtered noise for
+            # the breath. Attack is slow on purpose - a shankh has no transient.
+            base = 233.08
+            swell = np.clip(t / 0.45, 0.0, 1.0) * np.exp(-1.1 * np.maximum(t - 0.45, 0))
+            wave = swell * (
+                np.sin(2 * np.pi * base * t)
+                + 0.45 * np.sin(2 * np.pi * base * 2 * t)
+                + 0.20 * np.sin(2 * np.pi * base * 3 * t)
+            )
+            # Breath noise, smoothed so it is air rather than hiss.
+            rng_local = np.random.default_rng()
+            noise = rng_local.normal(0.0, 1.0, n)
+            kernel = np.ones(64) / 64.0
+            noise = np.convolve(noise, kernel, mode="same")
+            wave += 0.10 * swell * noise
 
-        # Normalize + short fade out
         peak = float(np.max(np.abs(wave))) or 1.0
-        wave /= peak
-        fade = min(int(0.4 * fps), n // 3)
-        wave[-fade:] *= np.linspace(1.0, 0.0, fade)
+        wave = wave / peak
+        fade = min(int(0.5 * fps), n // 3)
+        if fade > 0:
+            wave[-fade:] *= np.linspace(1.0, 0.0, fade)
 
         stereo = np.column_stack([wave, wave]).astype(np.float32)
         return AudioArrayClip(stereo, fps=fps).set_duration(duration)
@@ -1282,13 +1240,16 @@ def compose_video(voice_path, text, keywords, hook_text=None, out_path=None,
 
     Parameters
     ----------
-    voice_path : str   Path to the narration mp3 (required).
-    text       : str   The narration text (used only if captions are enabled).
-    keywords   : list  Footage search keywords for the background.
-    hook_text  : str   Short on-screen hook label for the first ~2.5s.
-    flashes    : list  Short phrases flashed mid-video. Used instead of rolling
-                       captions, which are off by design on this channel.
-    out_path   : str   Output mp4 path (optional; auto-named if omitted).
+    voice_path    : str   Path to the Hindi narration mp3 (required).
+    text          : str   The narration text (used only if captions are enabled).
+    keywords      : list  ATMOSPHERE footage searches (river, peacock, diya...).
+                          NOT the story subject - there is no stock footage of
+                          Krishna, so the story is carried by scene_prompts.
+    hook_text     : str   Short on-screen Hindi label for the first ~2.5s.
+    flashes       : list  Short Hindi phrases flashed mid-video.
+    scene_prompts : list  ENGLISH image prompts, one per story beat. These become
+                          the generated frames that actually depict the leela.
+    out_path      : str   Output mp4 path (optional; auto-named if omitted).
     """
     from moviepy.editor import AudioFileClip, CompositeVideoClip
 
@@ -1310,8 +1271,7 @@ def compose_video(voice_path, text, keywords, hook_text=None, out_path=None,
     duration = min(float(get_cfg("video.max_duration_seconds", 35)), duration)
     log.info("Target reel duration: %.2fs (voice_enabled=%s)", duration, voice_enabled)
 
-    # 1) Background. scene_prompts drive the generated Krishna frames; keywords
-    # only drive the real atmosphere cutaways spliced between them.
+    # 1) Background: generated leela scenes interleaved with real atmosphere.
     background = _build_background(keywords, duration, scene_prompts=scene_prompts)
     background = background.set_duration(duration)
 

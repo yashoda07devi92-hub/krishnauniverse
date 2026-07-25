@@ -23,6 +23,7 @@ import shutil
 import subprocess
 
 from .config import get_cfg
+from . import textrender
 
 log = logging.getLogger("krishna.thumbnail")
 
@@ -30,40 +31,29 @@ log = logging.getLogger("krishna.thumbnail")
 THUMB_W = 1080
 THUMB_H = 1920
 
-_FONT_CANDIDATES = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-]
-
-
 def _find_font(size):
-    """Load a font that can actually draw the headline.
+    """Load a Devanagari-capable font at `size`.
 
-    The headline here is Hindi, and DejaVu -- the only font the original version
-    looked for -- has no Devanagari glyphs, so every thumbnail would have come out
-    with a row of empty boxes stamped across it. Devanagari also needs shaping, so
-    this goes through textrender, which asks Pillow for the RAQM layout engine.
-    DejaVu is kept only as a last resort for ASCII headlines.
+    The font list this replaced was DejaVu and Arial only. Neither contains a
+    single Devanagari glyph, so the Hindi caption on every thumbnail would have
+    rendered as a row of empty boxes - and silently, since PIL raises nothing
+    when a glyph is missing. Resolution is delegated to textrender so the
+    thumbnail and the on-screen text can never disagree about which font exists.
+
+    ImageFont.load_default() is deliberately NOT used as a fallback: it is a tiny
+    bitmap Latin font, so it would produce an unreadable thumbnail instead of a
+    clean image with no caption.
     """
     from PIL import ImageFont
 
-    from . import textrender
-
-    deva = textrender.font_path()
-    candidates = ([deva] if deva else []) + _FONT_CANDIDATES
-    for path in candidates:
-        if path and os.path.exists(path):
-            try:
-                try:
-                    return ImageFont.truetype(path, size, layout_engine=ImageFont.Layout.RAQM)
-                except Exception:
-                    return ImageFont.truetype(path, size)
-            except Exception:
-                continue
+    path = textrender.find_font()
+    if not path:
+        log.warning("No font available; thumbnail will have no caption.")
+        return None
     try:
-        return ImageFont.load_default()
-    except Exception:
+        return ImageFont.truetype(path, size)
+    except Exception as exc:
+        log.warning("Could not load thumbnail font %s (%s).", path, exc)
         return None
 
 
@@ -201,7 +191,9 @@ def generate_thumbnail(video_path, headline="", out_path=None):
         text = str(headline or "").strip()
         if text and bool(get_cfg("thumbnail.text_enabled", True)):
             # Keep it very short: grid tiles are small, long text is noise.
-            text = " ".join(text.split()[:5]).upper()
+            # No .upper() - Devanagari has no letter case, so it was a silent
+            # no-op that only made the code look like it was shouting.
+            text = " ".join(text.split()[:4])
             draw = ImageDraw.Draw(img, "RGBA")
             font = _find_font(int(get_cfg("thumbnail.fontsize", 96)))
             if font is not None:

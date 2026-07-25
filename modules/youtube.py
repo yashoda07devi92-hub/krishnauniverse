@@ -163,7 +163,7 @@ def _build_metadata(title, description, tags):
         # No hashtags anywhere in the description -> fall back to the config set.
         fallback = get_cfg(
             "youtube.hashtags",
-            "#shorts #cute #wholesome #aww #heartwarming",
+            "#shorts #कृष्ण #कृष्णकथा #भक्ति",
         )
         if fallback:
             full_desc = (full_desc + "\n\n" + fallback).strip()
@@ -173,7 +173,13 @@ def _build_metadata(title, description, tags):
             "title": title[:100],
             "description": full_desc[:4900],
             "tags": all_tags,
-            "categoryId": str(get_cfg("youtube.category_id", "15")),
+            "categoryId": str(get_cfg("youtube.category_id", "24")),
+            # Declaring the language matters on a Hindi channel. Left unset,
+            # YouTube guesses it from the title text; a Hindi video mislabelled
+            # as English gets served to the wrong audience and loses automatic
+            # title/description translation for other locales.
+            "defaultLanguage": get_cfg("youtube.default_language", "hi"),
+            "defaultAudioLanguage": get_cfg("youtube.default_audio_language", "hi"),
         },
         "status": {
             "privacyStatus": get_cfg("youtube.privacy_status", "public"),

@@ -22,7 +22,7 @@ import tempfile
 
 from .config import get_cfg, get_env
 
-log = logging.getLogger("krishnakatha.tts")
+log = logging.getLogger("krishna.tts")
 
 
 def _voice():
@@ -46,7 +46,7 @@ def _file_has_audio(path):
 
 def _chunk_text(text, max_chars=600):
     """Split text into sentence-aware chunks no longer than max_chars."""
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    sentences = re.split(r"(?<=[।.!?])\s+", text.strip())
     chunks = []
     current = ""
     for s in sentences:
