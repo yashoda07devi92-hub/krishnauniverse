@@ -37,10 +37,21 @@ from concurrent.futures import (
 )
 
 from .config import IMAGES_DIR, get_cfg, get_env
+from . import history
 
 log = logging.getLogger("krishna.aiimages")
 
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/"
+
+# Chosen once per run and reused for every scene in that reel. Two competing
+# requirements meet here:
+#   - WITHIN one reel every frame must share a look, or the 16 cuts read as a
+#     random image dump instead of one video.
+#   - ACROSS reels the look must MOVE, or the channel grid becomes five near
+#     identical golden-god-ray tiles a day. That was the owner's actual
+#     complaint: "सारे बैनर एक जैसे, लगता है सबने पेंटिंग कर दी हो."
+# A single global style string satisfied the first and caused the second.
+_run_style = None
 
 # Appended to every prompt. Pollinations has no dedicated negative-prompt
 # parameter, so the exclusions ride along in the prompt text. Text suppression
@@ -50,6 +61,34 @@ NEGATIVE_HINT = (
     "no text, no watermark, no signature, no letters, no captions, "
     "no distorted faces, no extra limbs"
 )
+
+
+def _pick_run_style(force_new=False):
+    """Resolve the visual style for this reel.
+
+    ai_images.style is the constant part (the palette and the subject matter that
+    make the channel recognisable). ai_images.style_variants supplies the part
+    that changes per reel - lens, time of day, camera height - drawn through
+    history so consecutive uploads cannot land on the same one.
+    """
+    global _run_style
+    if _run_style is not None and not force_new:
+        return _run_style
+    base = str(get_cfg("ai_images.style", "") or "").strip()
+    variants = [v for v in (get_cfg("ai_images.style_variants", []) or []) if str(v).strip()]
+    variant = ""
+    if variants:
+        variant = history.pick("image_styles", variants) or variants[0]
+    _run_style = ", ".join(p for p in (base, variant) if p)
+    if variant:
+        log.info("Visual variant for this reel: %s", variant)
+    return _run_style
+
+
+def _reset_run_style():
+    """Force the next reel in a batch to draw its own variant."""
+    global _run_style
+    _run_style = None
 
 
 def _requests():
@@ -155,8 +194,8 @@ def _clear_old_images():
         pass
 
 
-def _fetch_one(requests, prompt, dest, width, height, seed):
-    style = get_cfg("ai_images.style", "")
+def _fetch_one(requests, prompt, dest, width, height, seed, style=None):
+    style = _pick_run_style() if style is None else style
     full = ", ".join(p for p in (style, str(prompt).strip(), NEGATIVE_HINT) if p)
     url = POLLINATIONS_URL + urllib.parse.quote(full)
     params = {
@@ -215,6 +254,87 @@ def _fetch_one(requests, prompt, dest, width, height, seed):
     return False
 
 
+def generate_thumbnail_image(prompt, dest, target_w=None, target_h=None):
+    """Generate ONE dedicated image for the channel-grid thumbnail.
+
+    WHY THE THUMBNAIL GETS ITS OWN GENERATION
+    -----------------------------------------
+    The thumbnail used to be a frame grabbed out of the finished MP4. Every
+    degradation in the pipeline was therefore baked into the single image that
+    decides whether anyone clicks:
+
+      * the frame is a crop from a still that was upscaled to overscan size and
+        is mid-pan, so it is the softest moment of that shot;
+      * the moving grain layer (grain.opacity) sits on top of it, which is
+        correct for 30fps video and is just noise in a static JPEG;
+      * the warm grade has already been applied, so the thumbnail's own
+        saturation boost was a second pass on top of a first;
+      * and all of it survived an x264 encode at crf 16 before being re-encoded
+        as JPEG.
+    Four lossy steps, then sharpening applied to the result - which is exactly
+    what makes an image look like a smeared painting.
+
+    Generating one purpose-built frame instead costs a single extra API call and
+    skips all four. The prompt is also composed differently: a thumbnail is read
+    at about 250px wide on a phone grid, so it needs one large subject and an
+    uncluttered background, not a wide cinematic composition with seven things in
+    it.
+
+    Returns the path on success, None on any failure (never raises).
+    """
+    if not get_cfg("ai_images.enabled", True):
+        return None
+    prompt = str(prompt or "").strip()
+    if not prompt:
+        return None
+
+    requests = _requests()
+    if requests is None:
+        return None
+
+    width = int(get_cfg("thumbnail.hero_width", 1024))
+    height = int(get_cfg("thumbnail.hero_height", 1792))
+
+    # Composition rules for a 250px-wide tile, appended to the scene's own
+    # description so the picture still matches the video.
+    framing = str(get_cfg(
+        "thumbnail.hero_framing",
+        "close up portrait composition, single clear subject filling the frame, "
+        "expressive face, simple uncluttered background, strong rim light, "
+        "high micro detail, tack sharp focus",
+    ) or "").strip()
+    style = ", ".join(p for p in (_pick_run_style(), framing) if p)
+
+    os.makedirs(os.path.dirname(os.path.abspath(dest)) or ".", exist_ok=True)
+    seed = random.randint(1, 9_999_999)
+    ok = _fetch_one(requests, prompt, dest, width, height, seed, style=style)
+    if not ok:
+        log.warning("Dedicated thumbnail image failed; falling back to a scene image.")
+        return None
+
+    if target_w and target_h:
+        _postprocess(dest, int(target_w), int(target_h))
+    log.info("Dedicated thumbnail image ready: %s", dest)
+    return dest
+
+
+def scene_image_paths():
+    """Existing scene frames for this run, in order. Used by the thumbnail.
+
+    These are the images BEFORE they were animated and encoded, saved at JPEG
+    quality 95 with no chroma subsampling, so they are by a wide margin the
+    sharpest version of the reel's visuals that exists on disk.
+    """
+    try:
+        names = sorted(
+            f for f in os.listdir(str(IMAGES_DIR))
+            if f.startswith("scene_") and f.lower().endswith(".jpg")
+        )
+    except Exception:
+        return []
+    return [os.path.join(str(IMAGES_DIR), n) for n in names]
+
+
 def generate_scene_images(scene_prompts, max_images=None):
     """Generate one vertical frame per scene prompt, in parallel.
 
@@ -247,6 +367,14 @@ def generate_scene_images(scene_prompts, max_images=None):
 
     os.makedirs(str(IMAGES_DIR), exist_ok=True)
     _clear_old_images()
+
+    # Draw this reel's variant ONCE, here, before any worker starts. Chosen at
+    # this point rather than lazily inside _fetch_one because four threads calling
+    # a lazy initialiser would race and could hand different scenes different
+    # looks. It is deliberately NOT reset afterwards: the thumbnail is generated
+    # later in the run and must match the frames the viewer is about to see.
+    _reset_run_style()
+    _pick_run_style()
 
     results = {}
 

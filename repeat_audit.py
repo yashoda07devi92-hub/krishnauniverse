@@ -145,10 +145,20 @@ def main(argv=None):
     from modules import seo as sh_seo
     from modules import gemini_script
 
+    # NOTE ON THE LESSON POOLS
+    # ------------------------
+    # Reels now draw their premise from LESSON_POOL or TOPIC_POOL depending on
+    # content.lesson_share, and their hook/screen-hook from the matching pool.
+    # They are audited at the FULL rate (x1 per reel) even though each is really
+    # used on only a share of reels, because a pessimistic days-to-repeat number
+    # is the safe direction for this check to be wrong in.
     shorts_pools = {
         "topics": (sh_pools.TOPIC_POOL, 1),
+        "lessons": (sh_pools.LESSON_POOL, 1),
         "hooks": (sh_pools.HOOK_CANDIDATES, 1),
+        "lesson hooks": (sh_pools.LESSON_HOOKS, 1),
         "screen_hooks": (sh_pools.SCREEN_HOOKS, 1),
+        "lesson screens": (sh_pools.LESSON_SCREEN_HOOKS, 1),
         "flash phrases": (sh_pools.FLASH_PHRASES, FLASHES_PER_REEL),
         "sign-offs": (sh_pools.CTA_CANDIDATES, 1),
         "title patterns": (sh_seo.TITLE_PATTERNS, 1),

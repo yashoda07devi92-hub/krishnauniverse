@@ -91,7 +91,27 @@ def _used(name):
 
 
 def _key(item):
-    """Normalise so trivial casing/spacing differences still count as the same."""
+    """Normalise so trivial casing/spacing differences still count as the same.
+
+    SEQUENCES ARE FLATTENED, NOT str()'d
+    ------------------------------------
+    This is the fix for a silent, total failure of topic rotation. TOPIC_POOL and
+    LESSON_POOL entries are TUPLES. `json.dump` writes a tuple as a JSON array,
+    and `json.load` reads that array back as a LIST - so after one commit the same
+    topic had two different keys:
+
+        str(("कंस...", "डर से..."))  ->  "('कंस...', 'डर से...')"
+        str(["कंस...", "डर से..."])  ->  "['कंस...', 'डर से...']"
+
+    The pool item never matched its own history entry, `remaining()` always
+    returned the entire pool, and every topic was drawn with full replacement -
+    exactly the repetition this module exists to prevent, while history.json grew
+    and looked like it was working. Flattening any non-string sequence to a
+    joined string makes the tuple in the pool and the list from disk collapse onto
+    the same key.
+    """
+    if isinstance(item, (tuple, list)):
+        return " | ".join(" ".join(str(p).split()) for p in item).lower()
     return " ".join(str(item).split()).lower()
 
 
@@ -167,6 +187,44 @@ def discard():
     """Throw away this run's picks (used when a reel failed to render)."""
     global _pending
     _pending = {}
+
+
+# --------------------------------------------------------------------------
+# Content-level fingerprints
+# --------------------------------------------------------------------------
+# WHY POOL ROTATION IS NOT ENOUGH
+# -------------------------------
+# pick() guarantees the INPUT never repeats inside a cycle. It says nothing about
+# the OUTPUT: Gemini is free to answer two different prompts with the same closing
+# line, and once a pool resets the same input comes round again anyway. The one
+# thing a viewer actually notices on this channel is the seekh - the sentence the
+# whole reel exists to deliver - so that sentence is fingerprinted and checked
+# directly.
+#
+# Uses the same pending/commit buffer as pick(), so a run that dies mid-render
+# does not burn a lesson line either.
+def seen(name, item):
+    """True if this exact piece of content has already been published/queued."""
+    if not str(item or "").strip():
+        return False
+    key = _key(item)
+    if key in {_key(x) for x in _used(name)}:
+        return True
+    return key in {_key(x) for x in _pending.get(name, [])}
+
+
+def remember(name, item):
+    """Record a piece of generated content so it can never ship twice.
+
+    Unlike pick(), this list is never reset: it is a permanent ledger, not a
+    rotation. A lesson line that has been published is spent forever.
+    """
+    if not str(item or "").strip():
+        return False
+    if seen(name, item):
+        return False
+    _pending.setdefault(name, []).append(item)
+    return True
 
 
 def status(pools):

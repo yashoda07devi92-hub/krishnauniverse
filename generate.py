@@ -94,6 +94,7 @@ def _build_seo(script):
         text=script.text,
         keywords=script.keywords,
         seekh=getattr(script, "seekh", ""),
+        apply_line=getattr(script, "apply_line", ""),
     )
 
 
@@ -143,12 +144,19 @@ def generate_one(topic=None, index=0):
     meta = _build_seo(script)
 
     # 5) Thumbnail for the channel grid / subscriptions feed (best-effort).
+    # The thumbnail no longer comes out of the encoded video. It is generated
+    # from its own prompt (or, failing that, from the SOURCE scene image) so it
+    # does not inherit the pan softness, the grain layer, the grade and the x264
+    # encode that made every banner on the grid look painted over. The opening
+    # scene prompt is passed so the picture still matches the reel.
+    scene_prompts = list(getattr(script, "scene_prompts", []) or [])
     thumb = None
     try:
         thumb = thumbnail_mod.generate_thumbnail(
             video_path=out,
             headline=getattr(script, "screen_hook", "") or script.title,
             out_path=thumb_path,
+            hero_prompt=scene_prompts[0] if scene_prompts else "",
         )
     except Exception as exc:
         log.warning("Thumbnail generation failed (%s); continuing without one.", exc)
@@ -159,7 +167,9 @@ def generate_one(topic=None, index=0):
         "screen_hook": getattr(script, "screen_hook", ""),
         "flashes": list(getattr(script, "flashes", []) or []),
         "seekh": getattr(script, "seekh", ""),
-        "scene_prompts": list(getattr(script, "scene_prompts", []) or []),
+        "apply": getattr(script, "apply_line", ""),
+        "lesson_mode": bool(getattr(script, "lesson_mode", False)),
+        "scene_prompts": list(scene_prompts),
         "text": script.text,
         "keywords": list(script.keywords),
         "subject": meta["subject"],

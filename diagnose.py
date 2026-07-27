@@ -258,6 +258,34 @@ def check_config():
     if "dejavu" in str(get_cfg("captions.font", "")).lower():
         problems.append("captions.font is a DejaVu name (it has no Devanagari glyphs)")
 
+    # THE THUMBNAIL-QUALITY REGRESSION GUARD.
+    # The owner's report was that every banner on the channel grid looked like a
+    # smeared painting. Two settings caused it, and both are the kind that get
+    # quietly restored by a copy-paste from an older config, with no error:
+    #   * words in ai_images.style that ASK the model for brush texture and blur;
+    #   * thumbnail.source = "frame", which pulls the banner out of the encoded
+    #     MP4 so it inherits the pan softness, grain layer, grade and x264 pass.
+    style = str(get_cfg("ai_images.style", "")).lower()
+    for banned in ("painterly", "film grain", "oil painting", "brush stroke",
+                   "watercolor", "watercolour", "illustration"):
+        if banned in style:
+            problems.append(
+                f"ai_images.style still asks for {banned!r} - that is what makes "
+                "every thumbnail look like a painting rather than a photo"
+            )
+    if str(get_cfg("thumbnail.source", "hero")).lower() == "frame":
+        problems.append(
+            "thumbnail.source is 'frame' - the banner would again be extracted "
+            "from the encoded video (soft, grainy, double-graded) instead of "
+            "being generated clean"
+        )
+    try:
+        share = float(get_cfg("content.lesson_share", 0.7))
+        if not 0.0 <= share <= 1.0:
+            problems.append(f"content.lesson_share must be 0-1, got {share}")
+    except Exception:
+        problems.append("content.lesson_share is not a number")
+
     print(f"  shorts   voice={voice}  lang={get_cfg('youtube.default_audio_language','?')}"
           f"  fps={get_cfg('video.fps','?')}")
 
