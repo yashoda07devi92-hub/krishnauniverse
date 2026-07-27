@@ -159,6 +159,9 @@ def main(argv=None):
         "lesson hooks": (sh_pools.LESSON_HOOKS, 1),
         "screen_hooks": (sh_pools.SCREEN_HOOKS, 1),
         "lesson screens": (sh_pools.LESSON_SCREEN_HOOKS, 1),
+        "attributions": (sh_pools.KRISHNA_ATTRIBUTIONS, 1),
+        "banner hooks leela": (sh_pools.THUMB_HOOKS_LEELA, 1),
+        "banner hooks lesson": (sh_pools.THUMB_HOOKS_LESSON, 1),
         "flash phrases": (sh_pools.FLASH_PHRASES, FLASHES_PER_REEL),
         "sign-offs": (sh_pools.CTA_CANDIDATES, 1),
         "title patterns": (sh_seo.TITLE_PATTERNS, 1),
@@ -224,8 +227,10 @@ def main(argv=None):
         pass
 
     titles, descs, hashsets, screens, flashes_seen = [], [], [], [], []
+    banners = []
     scripts = gemini_script.generate_scripts(reels)
     for s in scripts:
+        banners.append(getattr(s, "thumb_hook", "") or "")
         meta = sh_seo.build_metadata(s.title, s.text, s.keywords, seekh=s.seekh)
         titles.append(meta["youtube_title"])
         descs.append(meta["youtube_description"])
@@ -312,6 +317,30 @@ def main(argv=None):
            "flash phrases repeated before the pool was exhausted",
            "%d distinct from pool of %d" % (len(set(flashes_seen)),
                                             len(sh_pools.FLASH_PHRASES)))
+
+    # BANNER HOOKS - the owner's hardest requirement, stated twice: "हर बैनर
+    # दूसरे बैनर से डिफरेंट होगा", "कुछ भी रिपीट नहीं होना चाहिए, चाहे कुछ भी
+    # हो जाए." This is the string a viewer reads on the channel grid, so a repeat
+    # here is the most visible repeat the pipeline can produce.
+    #
+    # Asserted as ZERO duplicates rather than as a percentage. Unlike the other
+    # pools, banner hooks are gated by a PERMANENT ledger
+    # (gemini_script.THUMB_HOOK_LEDGER) and not by rotation, so a repeat is not
+    # "early" - it is a bug. Blank hooks are counted separately: a blank means
+    # the fallback pool ran dry, which is a capacity warning, not a duplicate.
+    filled = [b for b in banners if b]
+    blanks = len(banners) - len(filled)
+    dupe_banners = len(filled) - len(set(filled))
+    print("  distinct banner hooks  : %4d/%d  (%d duplicate(s), %d unfilled)" %
+          (len(set(filled)), len(filled), dupe_banners, blanks))
+    rep.ok(dupe_banners == 0,
+           "the SAME banner hook was printed on more than one thumbnail",
+           "%d duplicate(s) across %d reels" % (dupe_banners, len(filled)))
+    if blanks:
+        print("  NOTE: %d reel(s) got no fallback banner hook because the pools were"
+              % blanks)
+        print("        exhausted. In production Gemini writes a fresh hook per reel,")
+        print("        so the fallback pools are only reached when the API is down.")
 
     # Identical description TAILS were the parent channel's actual failure.
     tails = [d[-140:] for d in descs]

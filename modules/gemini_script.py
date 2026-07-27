@@ -49,10 +49,13 @@ from .pools import (
     DEFAULT_KEYWORDS,
     FLASH_PHRASES,
     HOOK_CANDIDATES,
+    KRISHNA_ATTRIBUTIONS,
     LESSON_HOOKS,
     LESSON_POOL,
     LESSON_SCREEN_HOOKS,
     SCREEN_HOOKS,
+    THUMB_HOOKS_LEELA,
+    THUMB_HOOKS_LESSON,
     TOPIC_POOL,
 )
 from . import history
@@ -85,6 +88,47 @@ FALLBACK_SCENES = [
 # history.seen()/remember(): pool rotation protects the INPUT, this protects the
 # OUTPUT, so the same seekh can never be published twice even after a reset.
 SEEKH_LEDGER = "seekh_lines"
+
+# Same permanent-ledger treatment for the banner line. The thumbnail hook is the
+# single most visible string this pipeline produces - it is what a viewer sees on
+# the channel grid before anything else - so a repeat there is the most damaging
+# repeat available. "कुछ भी रिपीट नहीं होना चाहिए, चाहे कुछ भी हो जाए."
+THUMB_HOOK_LEDGER = "thumb_hooks_used"
+
+
+def _pick_attribution():
+    """The phrase that puts the seekh in Krishna's mouth, rotated per reel."""
+    return history.pick("attributions", KRISHNA_ATTRIBUTIONS) or KRISHNA_ATTRIBUTIONS[0]
+
+
+def _fallback_thumb_hook(lesson_mode=False):
+    """A banner hook for when the model gives nothing usable.
+
+    Drawn through history AND checked against the permanent ledger, so a fallback
+    can never put the same line on two banners.
+    """
+    pool = THUMB_HOOKS_LESSON if lesson_mode else THUMB_HOOKS_LEELA
+    for _ in range(6):
+        hook = history.pick("thumb_hooks", list(pool))
+        if hook and not history.seen(THUMB_HOOK_LEDGER, hook):
+            return hook
+    return None
+
+
+def _clean_thumb_hook(raw, lesson_mode=False):
+    """Validate the model's banner hook, then fall back if it is unusable.
+
+    Rejected: anything empty, longer than 5 words, or carrying punctuation that
+    looks wrong set in 104px type on a phone-sized tile. Also rejected: a hook
+    already printed on an earlier banner.
+    """
+    hook = " ".join(str(raw or "").split())
+    hook = re.sub(r"[\"'“”‘’#*_`\[\](){}<>|]", "", hook).strip(" .।,-—–")
+    if hook and 1 <= len(hook.split()) <= 5 and not history.seen(THUMB_HOOK_LEDGER, hook):
+        return hook
+    if hook:
+        log.info("Banner hook %r unusable or already used; drawing a fallback.", hook[:40])
+    return _fallback_thumb_hook(lesson_mode)
 
 
 def _pick_cta():
@@ -184,6 +228,11 @@ class Script:
     # repeating the same generic "सीख" sentence.
     apply_line: str = ""
     lesson_mode: bool = False  # True when the premise came from LESSON_POOL
+    # The curiosity line printed on the channel-grid banner. Separate from
+    # screen_hook (which is burned into the opening 2.2s of the VIDEO) because
+    # the two jobs are different: screen_hook keeps a viewer who is already
+    # watching, thumb_hook has to earn the tap in the first place.
+    thumb_hook: str = ""
 
     def __post_init__(self):
         if not self.hook:
@@ -244,10 +293,11 @@ _PROMPT_TEMPLATE = """आप "Krishna Universe" नाम के हिंदी
 STRUCTURE — इसी क्रम में लिखें:
   1. पहला वाक्य: 4 से 9 शब्द का hook, जो दर्शक की अपनी परेशानी को छू ले।
   2. दो-तीन वाक्य: ऊपर दिया प्रसंग। बहुत छोटा रखें — कौन, कहाँ, क्या हुआ। बस।
-  3. दो-तीन वाक्य: कान्हा जो समझा रहे हैं, वो CAUSE-AND-EFFECT में कहें —
-     "ऐसा करोगे तो ऐसा होगा", "ऐसा करते रहे तो ये होता है"। सिर्फ़ उपदेश नहीं,
-     वजह बताएँ। एक छोटा, ठोस उदाहरण दें।
-  4. एक वाक्य: सीख साफ़, छोटी लाइन में।
+  3. दो-तीन वाक्य: यहाँ सीख श्रीकृष्ण के अपने मुँह से कहलवाएँ। इसी वाक्य से
+     शुरू करें: "{attribution}" ... और आगे कान्हा की बात लिखें।
+     बात CAUSE-AND-EFFECT में हो: "ऐसा करोगे तो ऐसा होगा", "ऐसा करते रहे तो ये
+     होता है"। सिर्फ़ उपदेश नहीं, वजह बताएँ। एक छोटा ठोस उदाहरण दें।
+  4. एक वाक्य: सीख साफ़, छोटी लाइन में — और ये भी कान्हा की कही बात के रूप में।
   5. एक वाक्य: दर्शक आज, अपने जीवन में, ये कैसे करे — "आज के जीवन में" वाली बात
      को अपने शब्दों में, सीधे दर्शक से कहते हुए ("आप", "आज", "कीजिए")।
   6. सबसे आख़िर में बिल्कुल यही वाक्य: "{cta}"
@@ -256,8 +306,18 @@ STRUCTURE — इसी क्रम में लिखें:
 - लंबाई लगभग {words} शब्द। कम से कम {min_words} और {max_words} से ज़्यादा
   बिल्कुल नहीं। बोलने पर ये लगभग 26 से 36 सेकंड बनता है।
 - {min_words} शब्द से छोटा narration अस्वीकार कर दिया जाएगा।
-- सरल, बोलचाल की हिंदी। कठिन संस्कृत शब्द नहीं। शांत, अपनापन लिए, पर उपदेश
-  देने वाले अंदाज़ में नहीं — जैसे कोई बड़ा भाई कंधे पर हाथ रखकर समझा रहा हो।
+- ये सबसे ज़रूरी नियम है: पूरे narration में कम से कम दो बार साफ़ पता चले कि ये
+  बात श्रीकृष्ण की कही हुई है। "श्रीकृष्ण कहते हैं", "कान्हा ने कहा",
+  "श्रीकृष्ण ने समझाया" जैसे शब्द इस्तेमाल करें। सीख कभी अपनी तरफ़ से मत दें —
+  हमेशा कान्हा के कहे के रूप में दें। ये चैनल श्रीकृष्ण की सीख का चैनल है,
+  सामान्य सलाह का नहीं।
+- सरल, बोलचाल की हिंदी। कठिन संस्कृत शब्द नहीं। शांत, अपनापन लिए, श्रद्धा के
+  साथ।
+- वाक्य छोटे रखें, 8 से 14 शब्द। लंबे वाक्य बोलने में उलझ जाते हैं और सुनने
+  वाले को समझ नहीं आते।
+- DASH का इस्तेमाल बिल्कुल मत करें। कोई "—", कोई "–", कोई "-" नहीं। ठहराव के
+  लिए सिर्फ़ कॉमा (,) और पूर्ण विराम (।) लगाएँ। ये ज़रूरी है क्योंकि आवाज़
+  बनाने वाला इंजन dash पर वाक्य तोड़ देता है और सुनने में आवाज़ अटकी हुई लगती है।
 - "आज की कथा", "सुनिए एक कथा", "प्रस्तुत है" जैसी भूमिका बिल्कुल मत बाँधें।
   सीधे बात से शुरू करें।
 - सीख को "अच्छा बनो", "धर्म का पालन करो" जैसे बड़े-बड़े शब्दों में मत कहें।
@@ -272,7 +332,14 @@ STRUCTURE — इसी क्रम में लिखें:
       अच्छा: "गुस्सा पहले किसे जलाता है"। बुरा: "कालिया नाग की कथा"।
   "text": पूरा narration एक string में (हिंदी),
   "seekh": सीख एक छोटी हिंदी लाइन में, cause-and-effect के रूप में,
-  "apply": एक छोटी हिंदी लाइन — दर्शक आज ये कैसे लगाए,
+  "apply": एक छोटी हिंदी लाइन, दर्शक आज ये कैसे लगाए,
+  "thumb_hook": thumbnail पर छपने वाली 2 से 4 शब्द की हिंदी लाइन, जो देखते ही
+      जिज्ञासा जगा दे और क्लिक करवा दे। इसी video की बात हो, झूठा वादा नहीं —
+      जो thumbnail पर लिखा है वो video में आना ही चाहिए, वरना दर्शक दो सेकंड
+      में निकल जाता है और video का नुक़सान होता है।
+      अच्छे उदाहरण: "कान्हा और काला नाग", "पर्वत उठा लिया", "गुस्सा किसे जलाता है",
+      "यही सबसे बड़ी भूल"। बुरे उदाहरण: "कृष्ण कथा", "आज की सीख" (इनमें
+      जिज्ञासा नहीं है)।
   "scene_prompts": {scenes} ENGLISH image-generation prompts का array, narration
       के क्रम में। हर prompt एक पूरा दृश्य बताए — कौन है, कहाँ है, क्या हो रहा
       है, रोशनी कैसी है। उदाहरण: "young krishna speaking calmly to a troubled
@@ -317,7 +384,7 @@ def _build_prompt(premise, lesson, apply_line=""):
     return _PROMPT_TEMPLATE.format(
         premise=premise, lesson=lesson, apply=apply_line, words=target_words,
         min_words=min_words, max_words=max_words,
-        cta=_pick_cta(), scenes=scenes,
+        cta=_pick_cta(), scenes=scenes, attribution=_pick_attribution(),
     )
 
 
@@ -418,6 +485,7 @@ def _generate_with_gemini(premise, lesson, apply_line="", lesson_mode=False):
                 scene_prompts=scenes,
                 apply_line=str(data.get("apply") or apply_line or "").strip(),
                 lesson_mode=bool(lesson_mode),
+                thumb_hook=_clean_thumb_hook(data.get("thumb_hook"), lesson_mode),
             )
             if not _has_cta(script.text):
                 script.text = script.text.rstrip() + " " + _pick_cta()
@@ -624,10 +692,14 @@ def generate_script(topic=None):
         if apply_line and not script.apply_line:
             script.apply_line = apply_line
 
-    # Spend the seekh permanently. Recorded into the same pending buffer that
-    # generate.py commits only after the reel actually renders, so a failed run
-    # does not burn a lesson line.
+    if not script.thumb_hook:
+        script.thumb_hook = _fallback_thumb_hook(script.lesson_mode)
+
+    # Spend the seekh and the banner line permanently. Recorded into the same
+    # pending buffer that generate.py commits only after the reel actually
+    # renders, so a failed run does not burn either of them.
     history.remember(SEEKH_LEDGER, script.seekh)
+    history.remember(THUMB_HOOK_LEDGER, script.thumb_hook)
     return script
 
 
@@ -656,5 +728,7 @@ def generate_scripts(count, topic=None):
         script.hook = fresh_hook
         script.screen_hook = _pick_screen_hook(script.lesson_mode)
         script.flashes = _pick_flashes()
+        script.thumb_hook = _fallback_thumb_hook(script.lesson_mode)
+        history.remember(THUMB_HOOK_LEDGER, script.thumb_hook)
         results.append(script)
     return results
