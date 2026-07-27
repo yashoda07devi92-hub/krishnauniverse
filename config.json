@@ -152,8 +152,15 @@
     "comment": "HINDI voices. Madhur (male) leads because a katha-vachak reading suits this niche and is what the audience expects. The pool is deliberately SMALL - only 2 voices. The parent channel rotates 6, but on a katha channel a returning viewer builds trust with one narrator, and swapping voices daily breaks the only piece of channel identity a faceless channel has. Two is enough to avoid sounding like a single automated template while staying recognisable.",
     "voice": "hi-IN-MadhurNeural",
     "voice_pool": ["hi-IN-MadhurNeural", "hi-IN-SwaraNeural"],
-    "rate_pool": ["-12%", "-10%", "-8%"],
+    "rate_pool": ["-10%", "-8%"],
+    "rate_pool_note": "-12% dropped. At that speed the neural voice starts stretching vowels, which is one of the things that makes it audibly synthetic. -10% and -8% both read as an unhurried katha without the drag.",
     "rate": "-10%",
+    "attempts": 3,
+    "min_duration_ratio": 0.8,
+    "truncation_note": "edge-tts streams audio over a websocket and, when a chunk is dropped, writes a SHORT FILE AND RAISES NOTHING. The old check was only 'file bigger than 1KB', which a truncated render passes - so a reel shipped with the narration cut off part way through and the composer padded the rest with silence. That is the reported 'voice breaks in the middle'. tts.py now measures the rendered duration against what the script implies and retries up to 'attempts' times; min_duration_ratio is the floor below which a render is treated as truncated.",
+    "polish_enabled": true,
+    "target_lufs": -16.0,
+    "polish_note": "ffmpeg chain applied after synthesis: high-pass at 80Hz, a +2.5dB presence lift around 3kHz where Hindi consonant definition lives, gentle compression, then loudnorm to -16 LUFS (the level YouTube targets). Raw TTS is thin, quiet and a different volume every run; under a music bed that is exactly why the words became hard to make out. The pass is aborted if it changes the duration, since that would drift the audio away from the visual timeline.",
     "rate_note": "Slower than the parent channel. Devotional narration read at conversational speed sounds rushed and disrespectful, and Hindi TTS is harder to follow at speed than English.",
     "pitch": "+0Hz",
     "fallback_lang": "hi",
@@ -226,12 +233,12 @@
   },
   "music": {
     "enabled": true,
-    "volume": 0.16,
+    "volume": 0.09,
     "synth_fallback": true,
-    "synth_volume": 0.16,
+    "synth_volume": 0.09,
     "hook_sting_enabled": true,
-    "hook_sting_volume": 0.5,
-    "comment": "Music slightly quieter than the parent channel (0.18 -> 0.16). The narration here carries the whole video and Hindi consonant clusters lose clarity under a busy bed far faster than English does."
+    "hook_sting_volume": 0.28,
+    "comment": "Cut again, 0.16 -> 0.09, and the hook sting 0.5 -> 0.28. The owner reported not being able to make out what the narrator was saying. Two causes stacked: the narration was un-normalised and quiet (fixed in tts.py), and the bed plus a half-volume temple bell landed on top of the FIRST seconds of speech - the hook, the most important line in the reel. A devotional bed only has to be present, not audible."
   },
   "grade": {
     "comment": "Warm, rich, devotional. Vignette OFF (the oval look was rejected on the parent channel).",

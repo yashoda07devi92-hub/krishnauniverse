@@ -153,9 +153,15 @@ def generate_one(topic=None, index=0):
     scene_prompts = list(getattr(script, "scene_prompts", []) or [])
     thumb = None
     try:
+        # Headline priority: the banner-specific curiosity hook first. The
+        # screen_hook is written to hold a viewer who is ALREADY watching; the
+        # thumb_hook has to earn the tap on a crowded grid, which is a different
+        # job and needs a different line.
         thumb = thumbnail_mod.generate_thumbnail(
             video_path=out,
-            headline=getattr(script, "screen_hook", "") or script.title,
+            headline=(getattr(script, "thumb_hook", "")
+                      or getattr(script, "screen_hook", "")
+                      or script.title),
             out_path=thumb_path,
             hero_prompt=scene_prompts[0] if scene_prompts else "",
         )
@@ -169,6 +175,7 @@ def generate_one(topic=None, index=0):
         "flashes": list(getattr(script, "flashes", []) or []),
         "seekh": getattr(script, "seekh", ""),
         "apply": getattr(script, "apply_line", ""),
+        "thumb_hook": getattr(script, "thumb_hook", ""),
         "lesson_mode": bool(getattr(script, "lesson_mode", False)),
         "scene_prompts": list(scene_prompts),
         "text": script.text,
