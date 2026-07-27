@@ -26,14 +26,25 @@ Sharpening the end of that chain does not recover detail, it amplifies what the
 encoder left behind - which is exactly why the whole grid read as though it had
 been "painted over". The owner's words: "बैनर की क्वालिटी बहुत गंदी है."
 
-So the frame grab is now the LAST resort, not the first choice. In order:
+So the frame grab is now the LAST resort, not the first choice. The order is set
+by thumbnail.source:
 
-    1. a purpose-built hero image, generated for the thumbnail alone
-       (ai_images.generate_thumbnail_image) - zero lossy steps;
-    2. the sharpest of the run's SOURCE scene images, straight from
-       IMAGES_DIR at JPEG q95 with no chroma subsampling - pre-grain,
-       pre-grade, pre-encode;
-    3. a frame from the video, as before, so a thumbnail always exists.
+    "scene"  (DEFAULT) - the sharpest of the run's SOURCE scene images, straight
+                         from IMAGES_DIR at JPEG q95 with no chroma subsampling:
+                         pre-pan, pre-grain, pre-grade, pre-encode. This is where
+                         essentially all of the quality gain comes from, and it
+                         costs nothing;
+    "hero"             - additionally generates ONE image composed for the
+                         thumbnail alone (ai_images.generate_thumbnail_image),
+                         then falls back to "scene". Better framing for a 250px
+                         tile, but it is one more Pollinations request inside the
+                         same retry/backoff loop as the scene images, so it can
+                         add minutes of blocking wait to a render when the API is
+                         rate limiting. Off by default for that reason;
+    "frame"            - the old behaviour, kept only as an escape hatch.
+
+A frame from the video is used if the chosen source yields nothing, so a
+thumbnail always exists.
 
 Everything is best-effort: any failure returns None and the upload continues
 without a custom thumbnail.
