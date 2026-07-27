@@ -4,7 +4,7 @@
     "niche": "Bhagwan Shri Krishna ki leelayein aur unse milne wali seekh",
     "audience": "India (Hindi)",
     "language": "hi",
-    "tagline": "Roz ek katha, roz ek seekh",
+    "tagline": "Roz ek nayi seekh, jo aaj kaam aaye",
     "url": "https://www.youtube.com/@KrishnaUniverse",
     "url_note": "PLACEHOLDER. Replace with the real channel handle - it is printed in every description, so a wrong handle sends viewers nowhere."
   },
@@ -50,8 +50,28 @@
     "workers": 4,
     "attempts": 4,
     "time_budget_seconds": 240,
-    "style": "cinematic indian mythological art, dramatic warm lighting, rich saffron and deep blue palette, highly detailed, volumetric god rays, soft film grain, painterly, devotional, beautiful",
-    "style_note": "One house style across all 150 leelas. Without it every upload arrives in a different art style, which is what makes an AI channel look like a random image dump rather than a channel."
+    "style": "ultra detailed cinematic still, indian mythology, photoreal rendering, dramatic rim light and soft key light, rich saffron gold and deep indigo palette, intricate fabric and jewellery detail, natural skin texture, sharp focus, shallow depth of field, professional colour grade",
+    "style_note": "REWRITTEN. The previous string ended with 'volumetric god rays, soft film grain, painterly, devotional, beautiful'. Three of those words were the whole problem the owner reported ('लगता है सबने पेंटिंग कर दी हो'): 'painterly' asks the model for visible brush texture, 'soft film grain' asks it to blur and add noise, and 'volumetric god rays' on every single prompt is what made all five uploads a day come out as the same orange sunbeam picture. Replaced with terms that ask for detail and real texture instead of brush strokes. Palette and subject matter are unchanged, so the channel still looks like itself.",
+    "style_variants": [
+      "golden hour side lighting, warm haze, low camera angle",
+      "cool blue pre dawn light, soft mist, eye level camera",
+      "warm lamp lit interior at night, deep shadows, intimate close framing",
+      "overcast monsoon daylight, wet surfaces, muted greens, medium shot",
+      "strong backlight silhouette rim, dust motes in the air, wide composition",
+      "clear midday sun, crisp shadows, vivid saturated colour, low angle",
+      "torch and firelight, orange glow on faces, tight close up",
+      "moonlit night, cool silver highlights, deep blue shadows, wide shot",
+      "soft diffused shade under trees, dappled light, natural colour, medium close up",
+      "dramatic storm light, dark clouds with bright breaks, epic wide angle",
+      "candle and diya glow, shallow depth of field, very close framing",
+      "early morning sunrise glow, long soft shadows, calm palette, medium wide"
+    ],
+    "style_variants_note": "Drawn one per reel through modules/history.py, so no two consecutive uploads share a look while every frame INSIDE one reel does. This is the fix for the channel grid reading as five near-identical tiles a day. Lens, light and time of day change; palette and subject do not, so the channel stays recognisable."
+  },
+  "content": {
+    "comment": "How reel premises are chosen. LESSON_POOL (143 entries) is seekh-first: a small prasang in which Krishna explains a cause-and-effect rule, plus where it applies in the viewer's own week. TOPIC_POOL (150) is the leela list, now also narrated in that same lesson-first shape. lesson_share is the probability a reel comes from LESSON_POOL.",
+    "lesson_share": 0.7,
+    "lesson_share_note": "0.7, not 1.0. The leelas pull real search traffic - people actively look for 'गोवर्धन' and 'सुदामा' in a way they never search for generic advice - and since the prompt now forces every leela to land on a same-day takeaway too, keeping 30% of them costs nothing and keeps that traffic. Set to 1.0 for pure lesson reels."
   },
   "transitions": {
     "comment": "Shorter than the parent channel's 0.3s. With cuts every ~1.6-2.6s a long crossfade eats a real fraction of each shot and softens the pace.",
@@ -157,11 +177,26 @@
     "comment": "Shorts thumbnails do not show inside the Shorts player, but they ARE the channel grid, the subscriptions feed and search - the surfaces where a viewer decides to subscribe. Text is drawn through textrender so the Hindi caption is shaped correctly.",
     "enabled": true,
     "text_enabled": true,
-    "fontsize": 92,
-    "stroke_width": 7,
-    "saturation": 1.22,
-    "contrast": 1.1,
-    "brightness": 1.05
+    "source": "hero",
+    "source_note": "'hero' generates ONE image just for the thumbnail, then falls back to the sharpest SOURCE scene image, then to a video frame. 'scene' skips the extra API call and goes straight to the source scene images. 'frame' is the old behaviour and is kept only as an escape hatch - it pulls the picture out of the encoded MP4, so it carries the pan softness, the grain layer, the grade and the x264 encode, which is what made every banner look painted over.",
+    "hero_width": 1024,
+    "hero_height": 1792,
+    "hero_dimension_note": "Same native diffusion bucket as the scene images (1.83 MP at 0.571). Asking for 1080x1920 directly distorts anatomy - see ai_images.dimension_note.",
+    "hero_framing": "close up portrait composition, single clear subject filling the frame, expressive face, simple uncluttered background, strong rim light, high micro detail, tack sharp focus",
+    "hero_framing_note": "A thumbnail is read at roughly 250px wide in the channel grid. A wide cinematic composition with seven elements in it becomes mud at that size, so the thumbnail image is composed differently from the video frames: one big subject, empty background, hard light.",
+    "fontsize": 104,
+    "max_words": 5,
+    "max_lines": 2,
+    "stroke_width": 6,
+    "scrim_opacity": 0.82,
+    "scrim_note": "The headline sits on a bottom-up transparent-to-black gradient instead of the flat grey band the first version drew. A hard-edged band across a 9:16 tile looks like a UI panel pasted onto the picture.",
+    "accent_color": "#FFC44C",
+    "jpeg_quality": 94,
+    "sharpen_percent": 60,
+    "saturation": 1.08,
+    "contrast": 1.06,
+    "brightness": 1.02,
+    "grade_note": "All four values were cut hard (was sat 1.22 / con 1.1 / bri 1.05 with a 110% unsharp mask). Those settings existed to rescue a soft, already-graded video frame. On a clean source they stack on top of a picture that is already finished - pushing skin tones orange and haloing every edge, which reads as 'over-processed painting' exactly like the old thumbnails did."
   },
   "pexels": {
     "comment": "ATMOSPHERE ONLY. These are things that genuinely exist on stock video sites - river water, peacocks, cows, diya flames, rain. Krishna himself is never searched for here (there is no such footage); the leela is carried by ai_images. The composer cuts these real moving shots between the generated frames, which is what stops the result reading as a slideshow.",

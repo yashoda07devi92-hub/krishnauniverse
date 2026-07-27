@@ -152,10 +152,16 @@ SEARCH_ANCHORS = {
         "कृष्ण की कहानी", "रुक्मिणी विवाह कथा",
             "द्वारका की कथा", "कृष्ण द्वारका लीला", "श्रीकृष्ण जीवन कथा",
     ],
+    # bhakti is DEFAULT_SUBJECT, so it is where the lesson-first reels land when
+    # they name no specific leela. Its anchors are therefore weighted towards
+    # what someone looking for a usable takeaway actually types, not towards
+    # story titles.
     "bhakti": [
         "कृष्ण भक्ति कथा", "श्रीकृष्ण की सीख", "कान्हा की सीख", "कृष्ण उपदेश",
         "प्रेरणादायक कथा", "कृष्ण कथा हिंदी", "भक्ति कथा",
             "कृष्ण भक्ति की कथा", "श्रीकृष्ण महिमा", "भक्ति की सीख",
+            "जीवन की सीख", "कृष्ण की अनमोल बातें", "श्रीकृष्ण के विचार",
+            "जीवन बदलने वाली बात", "कान्हा की अनमोल सीख", "प्रेरणादायक विचार",
     ],
 }
 
@@ -213,6 +219,26 @@ TITLE_PATTERNS = [
     "{anchor} — {core} | सुनिए",
     "{core} | {anchor} | सीख भरी कथा",
     "{core} | एक-एक शब्द सुनिए | {anchor}",
+    # SEEKH-FIRST PATTERNS. The list above is built around the word "कथा",
+    # which is right for a retelling. The reels now lead with a takeaway the
+    # viewer can use today (see gemini_script._PROMPT_TEMPLATE), and a title
+    # promising a story while the video gives advice is a mismatch a viewer
+    # punishes in the first two seconds. These promise the takeaway instead.
+    "{core} | ये आज ही काम आएगा | {anchor}",
+    "{core} — कान्हा की सीख | {anchor}",
+    "अगर {core} | {anchor}",
+    "{core} | बस इतना कीजिए | {anchor}",
+    "{core}? कान्हा का जवाब | {anchor}",
+    "{core} | 30 सेकंड में समझिए | {anchor}",
+    "{core} — यही एक बात काफ़ी है | {anchor}",
+    "{core} | आज से ये करके देखिए",
+    "{core} | {anchor} | जीवन की सीख",
+    "{core} — इसका असर आज दिखेगा | {anchor}",
+    "{core} | ये गलती मत कीजिए | {anchor}",
+    "{core} | कान्हा ने वजह भी बताई | {anchor}",
+    "{core} — एक आदत, बड़ा फर्क | {anchor}",
+    "{core} | {anchor} | रोज़ की सीख",
+    "{core} | यही सबसे काम की बात है",
     "{core} — {anchor} | आज की बात",
     "{core} | {anchor} | कान्हा की कथा",
     "{core} | यही सबसे बड़ी बात है",
@@ -653,7 +679,7 @@ def _teaser(text, max_chars=160):
 
 
 def build_description(core_title, text="", seekh="", subject=None, hashtags=None,
-                      keywords=None, rng=None):
+                      keywords=None, rng=None, apply_line=""):
     """Assemble the video description.
 
     Structure is deliberate: the searchable line comes FIRST because only the
@@ -700,6 +726,13 @@ def build_description(core_title, text="", seekh="", subject=None, hashtags=None
     if seekh:
         parts.append("")
         parts.append(f"सीख: {str(seekh).strip().rstrip('।')}।")
+    # The application line, verbatim from the script. Two reasons it is worth its
+    # own line: it is the only part of the description that is about the VIEWER
+    # rather than about Krishna, and because it is unique per reel it keeps the
+    # middle of the description from collapsing into the same generic sentence on
+    # every upload.
+    if str(apply_line or "").strip():
+        parts.append(f"आज कैसे लगाएँ: {str(apply_line).strip().rstrip('।')}।")
     parts.append("")
     parts.append(question)
     parts.append("")
@@ -775,7 +808,8 @@ def build_pinned_comment(rng=None):
 # ==========================================================================
 # Public API
 # ==========================================================================
-def build_metadata(core_title, text="", keywords=None, rng=None, seekh=""):
+def build_metadata(core_title, text="", keywords=None, rng=None, seekh="",
+                   apply_line=""):
     """Build the complete metadata bundle for one video.
 
     Returned keys are kept identical to the parent pipeline so generate.py, the
@@ -790,7 +824,7 @@ def build_metadata(core_title, text="", keywords=None, rng=None, seekh=""):
     title = build_title(core_title, text=text, keywords=keywords, subject=subject, rng=rng)
     description = build_description(
         core_title, text=text, seekh=seekh, subject=subject,
-        hashtags=hashtags, keywords=keywords, rng=rng,
+        hashtags=hashtags, keywords=keywords, rng=rng, apply_line=apply_line,
     )
     tags = build_tags(core_title=core_title, keywords=keywords, subject=subject, rng=rng)
 

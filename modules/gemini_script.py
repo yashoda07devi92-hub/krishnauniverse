@@ -2,9 +2,22 @@
 """
 Hindi script generation for Krishna Universe Shorts.
 
-Produces a ~30 second Hindi narration about one leela from Krishna's life, the
-seekh (lesson) it teaches, and - new in this channel - a list of ENGLISH scene
-prompts used to generate the visuals.
+Produces a ~30 second Hindi narration built around ONE usable seekh, the everyday
+situation it applies to, and a list of ENGLISH scene prompts used to generate the
+visuals.
+
+SEEKH-FIRST, NOT KATHA-FIRST
+----------------------------
+This module used to ask for "a leela plus the lesson it teaches". It now asks for
+the inverse: a cause-and-effect rule Krishna is explaining, with a small prasang
+as the evidence and a closing line telling the viewer where it applies in their
+own week. See the long note above _PROMPT_TEMPLATE for why - in short, a
+retelling of a story the audience already knows gives them no reason to stay and
+nothing to carry away, and the channel's view counts said so.
+
+Premises come from pools.LESSON_POOL (seekh-first) mixed with pools.TOPIC_POOL
+(leela-as-evidence) at content.lesson_share. Both are told in the same
+lesson-first shape.
 
 WHY SCENE PROMPTS
 -----------------
@@ -36,6 +49,9 @@ from .pools import (
     DEFAULT_KEYWORDS,
     FLASH_PHRASES,
     HOOK_CANDIDATES,
+    LESSON_HOOKS,
+    LESSON_POOL,
+    LESSON_SCREEN_HOOKS,
     SCREEN_HOOKS,
     TOPIC_POOL,
 )
@@ -65,12 +81,33 @@ FALLBACK_SCENES = [
 ]
 
 
+# Permanent ledger key for the one line a viewer actually takes away. See
+# history.seen()/remember(): pool rotation protects the INPUT, this protects the
+# OUTPUT, so the same seekh can never be published twice even after a reset.
+SEEKH_LEDGER = "seekh_lines"
+
+
 def _pick_cta():
     return history.pick("ctas", CTA_CANDIDATES)
 
 
-def _pick_screen_hook():
+def _pick_screen_hook(lesson_mode=False):
+    """The 2-4 word on-screen label, which is also the thumbnail headline.
+
+    Lesson reels draw from a pool that names no episode - putting "गोवर्धन उठा"
+    on a reel about controlling anger is a promise the video does not keep, and
+    that mismatch is read as clickbait.
+    """
+    if lesson_mode:
+        return history.pick("lesson_screen_hooks", LESSON_SCREEN_HOOKS)
     return history.pick("screen_hooks", SCREEN_HOOKS)
+
+
+def _pick_spoken_hook(lesson_mode=False):
+    """The narrated opening sentence. Same episode-vs-lesson split as above."""
+    if lesson_mode:
+        return history.pick("lesson_hooks", LESSON_HOOKS)
+    return history.pick("hooks", HOOK_CANDIDATES)
 
 
 def _pick_flashes(count=3):
@@ -140,6 +177,13 @@ class Script:
     flashes: list = field(default_factory=list)
     seekh: str = ""           # the lesson, reused in the description
     scene_prompts: list = field(default_factory=list)  # ENGLISH image prompts
+    # Where the seekh applies in a viewer's own week. This is the line that
+    # decides whether the reel changed someone's day or was just pleasant to
+    # listen to, so it is a first-class field and not left inside `text`: the
+    # description reuses it verbatim, which also stops every description from
+    # repeating the same generic "सीख" sentence.
+    apply_line: str = ""
+    lesson_mode: bool = False  # True when the premise came from LESSON_POOL
 
     def __post_init__(self):
         if not self.hook:
@@ -162,41 +206,79 @@ class Script:
 # --------------------------------------------------------------------------
 # Gemini-backed generation
 # --------------------------------------------------------------------------
-_PROMPT_TEMPLATE = """आप "Krishna Universe" नाम के एक हिंदी YouTube Shorts चैनल के लिए
-स्क्रिप्ट लिखते हैं। चैनल का विषय: भगवान श्रीकृष्ण के जीवन की लीलाएँ और उनसे
-मिलने वाली सीख। दर्शक भारत में हैं, आम हिंदी बोलने वाले लोग।
+# THE SHIFT THIS PROMPT ENCODES: KATHA -> SEEKH
+# ---------------------------------------------
+# The previous template asked for a katha - "narrate this leela, then state its
+# lesson". Two things were wrong with that, and the channel's view counts (1 to 9
+# per upload) said so out loud:
+#
+#   1. NOTHING TO STAY FOR. The audience already knows that Krishna lifted
+#      Govardhan. A retelling has no open question, so there is no reason not to
+#      swipe at second three, and Shorts is driven almost entirely by whether
+#      people swipe at second three.
+#
+#   2. NOTHING TO TAKE AWAY. The lesson arrived as a moral tacked onto the end,
+#      phrased as a virtue ("respect those who feed you"). Nobody's Tuesday
+#      changes because of that. It is agreeable, and agreeable content does not
+#      get shared.
+#
+# So the shape is inverted. The leela (or the small prasang) is now the EVIDENCE,
+# cut down to two sentences, and the reel's real payload is a cause-and-effect
+# rule plus the exact place in the viewer's own week where it applies. That is
+# what the owner asked for: "30 सेकंड में कान्हा जी समझा रहे हों कि ऐसे-ऐसे
+# करने से ऐसे-ऐसे होता है."
+#
+# The word budget is unchanged, so the runtime and the voice track are untouched.
+_PROMPT_TEMPLATE = """आप "Krishna Universe" नाम के हिंदी YouTube Shorts चैनल के लिए
+लिखते हैं। दर्शक भारत में हैं — आम हिंदी बोलने वाले लोग, जो अपनी रोज़ की ज़िंदगी
+में परेशान हैं और तीस सेकंड में कुछ काम की बात चाहते हैं।
 
-इस लीला पर एक narration लिखें:
-  लीला: {premise}
-  सीख:  {lesson}
+ये चैनल "कथा सुनाने" वाला चैनल नहीं है। ये चैनल हर video में एक ऐसी सीख देता है
+जिसे दर्शक आज ही अपने जीवन में लगा सके। कथा सिर्फ़ उदाहरण है, असली चीज़ सीख है।
+
+इस पर एक 30 सेकंड का narration लिखें:
+  प्रसंग: {premise}
+  सीख:   {lesson}
+  आज के जीवन में: {apply}
+
+STRUCTURE — इसी क्रम में लिखें:
+  1. पहला वाक्य: 4 से 9 शब्द का hook, जो दर्शक की अपनी परेशानी को छू ले।
+  2. दो-तीन वाक्य: ऊपर दिया प्रसंग। बहुत छोटा रखें — कौन, कहाँ, क्या हुआ। बस।
+  3. दो-तीन वाक्य: कान्हा जो समझा रहे हैं, वो CAUSE-AND-EFFECT में कहें —
+     "ऐसा करोगे तो ऐसा होगा", "ऐसा करते रहे तो ये होता है"। सिर्फ़ उपदेश नहीं,
+     वजह बताएँ। एक छोटा, ठोस उदाहरण दें।
+  4. एक वाक्य: सीख साफ़, छोटी लाइन में।
+  5. एक वाक्य: दर्शक आज, अपने जीवन में, ये कैसे करे — "आज के जीवन में" वाली बात
+     को अपने शब्दों में, सीधे दर्शक से कहते हुए ("आप", "आज", "कीजिए")।
+  6. सबसे आख़िर में बिल्कुल यही वाक्य: "{cta}"
 
 नियम:
-- लंबाई लगभग {words} शब्द। कम से कम {min_words} शब्द ज़रूरी हैं और {max_words} से
-  ज़्यादा बिल्कुल नहीं। बोलने पर ये लगभग 26 से 36 सेकंड बनता है।
-- {min_words} शब्द से छोटी कथा अस्वीकार कर दी जाएगी — इसलिए कथा को पूरा कहें,
-  एक-दो दृश्य ज़रूर डालें, जल्दबाज़ी में मत निपटाएँ।
-- सरल, बोलचाल की हिंदी। कठिन संस्कृत शब्द नहीं। जैसे कोई दादी शांति से कथा
-  सुना रही हो — भावुक, गर्म, अपनापन लिए।
-- पहला वाक्य एक छोटा curiosity hook हो (4 से 9 शब्द), जो स्क्रॉल रोक दे।
-  हर बार अलग तरीके से लिखें।
-- कथा को सीधे उस दृश्य से शुरू करें, भूमिका मत बाँधें। 30 सेकंड में समय नहीं है।
-- अंत में ऊपर दी गई सीख को एक साफ़, छोटी लाइन में कहें — वही इस video का सार है।
-- सबसे आख़िर में बिल्कुल यही वाक्य लिखें: "{cta}"
-- केवल बोले जाने वाले वाक्य। कोई emoji नहीं, कोई hashtag नहीं, कोई markdown नहीं,
-  कोई stage direction नहीं। देवनागरी में लिखें।
-- कोई ऐसा दावा न करें जो शास्त्रों में नहीं है। लीला को वैसे ही रखें जैसे वो
+- लंबाई लगभग {words} शब्द। कम से कम {min_words} और {max_words} से ज़्यादा
+  बिल्कुल नहीं। बोलने पर ये लगभग 26 से 36 सेकंड बनता है।
+- {min_words} शब्द से छोटा narration अस्वीकार कर दिया जाएगा।
+- सरल, बोलचाल की हिंदी। कठिन संस्कृत शब्द नहीं। शांत, अपनापन लिए, पर उपदेश
+  देने वाले अंदाज़ में नहीं — जैसे कोई बड़ा भाई कंधे पर हाथ रखकर समझा रहा हो।
+- "आज की कथा", "सुनिए एक कथा", "प्रस्तुत है" जैसी भूमिका बिल्कुल मत बाँधें।
+  सीधे बात से शुरू करें।
+- सीख को "अच्छा बनो", "धर्म का पालन करो" जैसे बड़े-बड़े शब्दों में मत कहें।
+  ठोस बात कहें, जो कोई आज कर सके।
+- केवल बोले जाने वाले वाक्य। कोई emoji, hashtag, markdown या stage direction
+  नहीं। देवनागरी में लिखें।
+- कोई ऐसा दावा न करें जो शास्त्रों में नहीं है। प्रसंग को वैसे ही रखें जैसे वो
   प्रचलित है।
 
 सिर्फ़ एक JSON object लौटाएँ (कोई code fence नहीं), इन keys के साथ:
-  "title": हिंदी में छोटा आकर्षक शीर्षक (अधिकतम 9 शब्द),
+  "title": हिंदी में छोटा शीर्षक (अधिकतम 9 शब्द) जो सीख बताए, न कि कथा का नाम।
+      अच्छा: "गुस्सा पहले किसे जलाता है"। बुरा: "कालिया नाग की कथा"।
   "text": पूरा narration एक string में (हिंदी),
-  "seekh": सीख एक छोटी हिंदी लाइन में,
-  "scene_prompts": {scenes} ENGLISH image-generation prompts का array, कथा के
-      क्रम में। हर prompt एक पूरा दृश्य बताए — कौन है, कहाँ है, क्या हो रहा है,
-      रोशनी कैसी है। उदाहरण: "young krishna lifting a mountain over a village
-      while heavy rain falls, villagers sheltering beneath, dramatic storm light".
+  "seekh": सीख एक छोटी हिंदी लाइन में, cause-and-effect के रूप में,
+  "apply": एक छोटी हिंदी लाइन — दर्शक आज ये कैसे लगाए,
+  "scene_prompts": {scenes} ENGLISH image-generation prompts का array, narration
+      के क्रम में। हर prompt एक पूरा दृश्य बताए — कौन है, कहाँ है, क्या हो रहा
+      है, रोशनी कैसी है। उदाहरण: "young krishna speaking calmly to a troubled
+      young cowherd under a banyan tree, warm late afternoon light".
       ये prompts अंग्रेज़ी में ही लिखें, हिंदी में नहीं।
-  "keywords": 3-5 ENGLISH stock-footage search phrases for ATMOSHPERE shots that
+  "keywords": 3-5 ENGLISH stock-footage search phrases for ATMOSPHERE shots that
       really exist on video sites — river water, peacock, cows, diya flame,
       monsoon rain, forest light, temple. Krishna himself must NOT appear in
       these, they are only background texture.
@@ -221,11 +303,19 @@ def estimated_seconds(word_count):
     return (word_count / WORDS_PER_MINUTE) * 60.0
 
 
-def _build_prompt(premise, lesson):
+def _build_prompt(premise, lesson, apply_line=""):
     target_words, min_words, max_words = _word_budget()
     scenes = int(get_cfg("ai_images.max_images", 7))
+    # A leela drawn from TOPIC_POOL has no "jeevan" field of its own, so the model
+    # is told to derive one rather than being handed an empty line - an empty
+    # placeholder made it skip step 5 of the structure entirely, which is the one
+    # step the whole rewrite exists for.
+    apply_line = str(apply_line or "").strip() or (
+        "इस सीख को आज दर्शक के अपने जीवन की एक आम स्थिति से जोड़कर बताएँ "
+        "(घर, नौकरी, पैसा, रिश्ते, पढ़ाई — जो इस सीख पर सबसे सही बैठे)"
+    )
     return _PROMPT_TEMPLATE.format(
-        premise=premise, lesson=lesson, words=target_words,
+        premise=premise, lesson=lesson, apply=apply_line, words=target_words,
         min_words=min_words, max_words=max_words,
         cta=_pick_cta(), scenes=scenes,
     )
@@ -268,7 +358,7 @@ def _clean_scene_prompts(raw_list):
     return out
 
 
-def _generate_with_gemini(premise, lesson):
+def _generate_with_gemini(premise, lesson, apply_line="", lesson_mode=False):
     """Try Gemini across the ordered model candidates. Returns Script or None."""
     api_key = get_env("GEMINI_API_KEY")
     if not api_key:
@@ -306,7 +396,7 @@ def _generate_with_gemini(premise, lesson):
             # Rebuilt per attempt so the CTA rotates and the length rules are
             # restated to each model.
             resp = model.generate_content(
-                _build_prompt(premise, lesson),
+                _build_prompt(premise, lesson, apply_line),
                 generation_config={"temperature": temperature},
             )
             data = _parse_model_json(getattr(resp, "text", None))
@@ -326,6 +416,8 @@ def _generate_with_gemini(premise, lesson):
                 keywords=[str(k).strip() for k in data.get("keywords", []) if str(k).strip()]
                 or random.sample(ATMOSPHERE_KEYWORDS, 5),
                 scene_prompts=scenes,
+                apply_line=str(data.get("apply") or apply_line or "").strip(),
+                lesson_mode=bool(lesson_mode),
             )
             if not _has_cta(script.text):
                 script.text = script.text.rstrip() + " " + _pick_cta()
@@ -357,6 +449,25 @@ def _generate_with_gemini(premise, lesson):
                     model_name, words, estimated_seconds(words), max_words,
                 )
                 continue
+
+            # DUPLICATE-SEEKH GATE.
+            # The pools guarantee a fresh PREMISE; they cannot stop the model from
+            # closing two different premises on the same sentence, and once a pool
+            # completes a cycle the premise itself comes round again. Since the
+            # seekh is the only line a viewer is meant to remember, a repeat of it
+            # IS a repeat of the video as far as they are concerned. Ask the next
+            # model instead - it is a fresh sample from a different model at
+            # temperature 0.92, so it very rarely lands on the same line twice.
+            if script.seekh and history.seen(SEEKH_LEDGER, script.seekh):
+                log.warning(
+                    "Model '%s' produced an already-published seekh (%r); "
+                    "trying next model for a fresh one.",
+                    model_name, script.seekh[:50],
+                )
+                if shortest_ok is None:
+                    shortest_ok = script
+                continue
+
             log.info(
                 "Gemini script ready via '%s' (%d words, %d scene prompt(s)).",
                 model_name, script.word_count, len(script.scene_prompts),
@@ -397,6 +508,11 @@ def load_fallback_scripts():
                         seekh=str(item.get("seekh", "")),
                         keywords=list(item.get("keywords", [])),
                         scene_prompts=list(item.get("scene_prompts", [])),
+                        apply_line=str(item.get("apply", "")),
+                        # Declared per entry so swap_spoken_hook draws from the
+                        # matching pool: a lesson-shaped fallback must not open
+                        # with "कंस ने सब कर लिया, पर एक चीज़ भूल गया।"
+                        lesson_mode=bool(item.get("lesson_mode", False)),
                     )
                 )
             except Exception:
@@ -419,6 +535,7 @@ def _fallback_script(premise=None, lesson=None):
                 "गया काम कभी बोझ नहीं बनता। " + _CTA
             ),
             seekh=lesson or "फल की चिंता छोड़कर किया गया काम कभी बोझ नहीं बनता",
+            apply_line="आज एक काम पूरा कीजिए और नतीजे की गिनती छोड़ दीजिए।",
             keywords=list(DEFAULT_KEYWORDS),
             scene_prompts=list(FALLBACK_SCENES),
         )
@@ -429,36 +546,88 @@ def _fallback_script(premise=None, lesson=None):
 # Public API
 # --------------------------------------------------------------------------
 def _split_topic(topic):
-    """Accept a (leela, seekh) tuple, or a plain string for --topic."""
-    if isinstance(topic, (tuple, list)) and len(topic) >= 2:
-        return str(topic[0]), str(topic[1])
-    return str(topic), ""
+    """Accept a (premise, seekh[, jeevan]) tuple, or a plain string for --topic.
+
+    LESSON_POOL entries carry a third field (where the seekh applies today);
+    TOPIC_POOL entries carry two. Both are unpacked here so callers never have to
+    know which pool a topic came from.
+    """
+    if isinstance(topic, (tuple, list)):
+        premise = str(topic[0]) if len(topic) >= 1 else ""
+        lesson = str(topic[1]) if len(topic) >= 2 else ""
+        apply_line = str(topic[2]) if len(topic) >= 3 else ""
+        return premise, lesson, apply_line
+    return str(topic), "", ""
+
+
+def _pick_topic():
+    """Draw the next premise, weighted towards the lesson pool.
+
+    WHY A MIX RATHER THAN A SWITCH
+    ------------------------------
+    The owner's instruction was that every reel must teach something new, and
+    LESSON_POOL is built for exactly that. But the 150 leelas in TOPIC_POOL are
+    genuine, recognisable content that pulls in search traffic a pure-advice reel
+    never will - "गोवर्धन" and "सुदामा" are things people actively look for, and
+    the new prompt now forces even those to be told as a cause-and-effect lesson
+    with a same-day application. Throwing them away would cost reach for no gain.
+    So the default is 70% lesson-first reels and 30% leela-as-evidence reels, and
+    both shapes deliver a takeaway. Tunable via content.lesson_share.
+
+    Returns (premise, lesson, apply_line, lesson_mode).
+    """
+    share = float(get_cfg("content.lesson_share", 0.7))
+    use_lesson = LESSON_POOL and random.random() < share
+    if use_lesson:
+        topic = history.pick("lessons", LESSON_POOL)
+        left, total = len(history.remaining("lessons", LESSON_POOL)), len(LESSON_POOL)
+        label = "seekh"
+    else:
+        topic = history.pick("topics", TOPIC_POOL)
+        left, total = len(history.remaining("topics", TOPIC_POOL)), len(TOPIC_POOL)
+        label = "leela"
+    premise, lesson, apply_line = _split_topic(topic)
+    log.info("Auto-picked %s: %s  (%d of %d unused)", label, premise, left, total)
+    return premise, lesson, apply_line, bool(use_lesson)
 
 
 def generate_script(topic=None):
     """Return a single Hindi Script, preferring Gemini and falling back."""
-    if not topic:
-        topic = history.pick("topics", TOPIC_POOL)
-        log.info(
-            "Auto-picked leela: %s  (%d of %d unused)",
-            topic[0] if isinstance(topic, (tuple, list)) else topic,
-            len(history.remaining("topics", TOPIC_POOL)), len(TOPIC_POOL),
-        )
-    premise, lesson = _split_topic(topic)
+    if topic:
+        premise, lesson, apply_line = _split_topic(topic)
+        lesson_mode = False
+    else:
+        premise, lesson, apply_line, lesson_mode = _pick_topic()
 
-    script = _generate_with_gemini(premise, lesson)
-    if script is None:
+    script = _generate_with_gemini(premise, lesson, apply_line, lesson_mode)
+    from_gemini = script is not None
+    if not from_gemini:
+        # The fallback tells whichever pre-written story it picked from
+        # quotes.json, NOT the premise that was just drawn. So the drawn lesson
+        # and its application must not be grafted on: a reel narrating Barbarik's
+        # sacrifice would close with a line about checking your results too often.
+        # The fallback's own seekh/apply are the only ones that match its text,
+        # and lesson_mode stays as that entry declares it so the hook pool matches
+        # too.
         script = _fallback_script(premise, lesson)
         log.info("Using fallback script: '%s'.", script.title)
 
-    fresh_hook = history.pick("hooks", HOOK_CANDIDATES)
+    fresh_hook = _pick_spoken_hook(script.lesson_mode)
     script.text = swap_spoken_hook(script.text, fresh_hook)
     script.text = swap_cta(script.text)
     script.hook = fresh_hook
-    script.screen_hook = _pick_screen_hook()
+    script.screen_hook = _pick_screen_hook(script.lesson_mode)
     script.flashes = _pick_flashes()
-    if lesson and not script.seekh:
-        script.seekh = lesson
+    if from_gemini:
+        if lesson and not script.seekh:
+            script.seekh = lesson
+        if apply_line and not script.apply_line:
+            script.apply_line = apply_line
+
+    # Spend the seekh permanently. Recorded into the same pending buffer that
+    # generate.py commits only after the reel actually renders, so a failed run
+    # does not burn a lesson line.
+    history.remember(SEEKH_LEDGER, script.seekh)
     return script
 
 
@@ -481,11 +650,11 @@ def generate_scripts(count, topic=None):
         # pool[i % len(pool)] hands back an object already in `results`, and
         # mutating it would overwrite the earlier reel's hook too.
         script = replace(pool[i % len(pool)])
-        fresh_hook = history.pick("hooks", HOOK_CANDIDATES)
+        fresh_hook = _pick_spoken_hook(script.lesson_mode)
         script.text = swap_spoken_hook(script.text, fresh_hook)
         script.text = swap_cta(script.text)
         script.hook = fresh_hook
-        script.screen_hook = _pick_screen_hook()
+        script.screen_hook = _pick_screen_hook(script.lesson_mode)
         script.flashes = _pick_flashes()
         results.append(script)
     return results
