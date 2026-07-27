@@ -144,11 +144,12 @@ def generate_one(topic=None, index=0):
     meta = _build_seo(script)
 
     # 5) Thumbnail for the channel grid / subscriptions feed (best-effort).
-    # The thumbnail no longer comes out of the encoded video. It is generated
-    # from its own prompt (or, failing that, from the SOURCE scene image) so it
-    # does not inherit the pan softness, the grain layer, the grade and the x264
-    # encode that made every banner on the grid look painted over. The opening
-    # scene prompt is passed so the picture still matches the reel.
+    # The thumbnail no longer comes out of the encoded video: by default it is
+    # built from the sharpest SOURCE scene image, so it does not inherit the pan
+    # softness, the grain layer, the grade and the x264 encode that made every
+    # banner on the grid look painted over. The opening scene prompt is passed
+    # anyway - it is only used when thumbnail.source is "hero", and passing it
+    # unconditionally keeps that a pure config switch with no code change.
     scene_prompts = list(getattr(script, "scene_prompts", []) or [])
     thumb = None
     try:
