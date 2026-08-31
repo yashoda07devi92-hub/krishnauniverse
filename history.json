@@ -6,17 +6,17 @@
     "desc_openers": 4,
     "desc_questions": 4,
     "flashes": 3,
-    "image_styles": 12,
+    "image_styles": 13,
     "lesson_hooks": 1,
     "lesson_screen_hooks": 1,
     "pinned": 4,
     "screen_hooks": 1,
     "title_anchors_bal_leela": 1,
     "title_anchors_bhakti": 3,
-    "title_anchors_gita": 1,
+    "title_anchors_gita": 2,
     "title_anchors_mahabharat": 3,
     "title_anchors_vrindavan": 4,
-    "voices": 81
+    "voices": 82
   },
   "used": {
     "attributions": [
@@ -26,7 +26,10 @@
       "श्रीकृष्ण ने कहा है कि",
       "कान्हा ने अर्जुन से कहा कि",
       "श्रीकृष्ण ने प्रेम से समझाया कि",
-      "श्रीकृष्ण ने समझाया कि"
+      "श्रीकृष्ण ने समझाया कि",
+      "श्रीकृष्ण ने बार बार कहा कि",
+      "कान्हा का यही उपदेश है कि",
+      "श्रीकृष्ण के शब्द हैं कि"
     ],
     "ctas": [
       "जय श्री कृष्ण। आपका दिन शुभ हो।",
@@ -69,25 +72,32 @@
       "ये सीख किसी अपने को भी भेज दीजिए।",
       "ये सीख याद रखिए, आज ही काम आएगी।",
       "राधे राधे। और गहरी कथाएँ आ रही हैं।",
-      "अगर आँखें भर आईं तो फॉलो कर लीजिए।"
+      "अगर आँखें भर आईं तो फॉलो कर लीजिए।",
+      "अगर मन को शांति मिली तो फॉलो कीजिए।",
+      "ये सीख किसी और को भी सुनाइए।",
+      "इस बात को आज आज़माइए। हरे कृष्ण।",
+      "ऐसी ही कथाओं के लिए चैनल फॉलो कर लीजिए।"
     ],
     "desc_ctas": [
       "रोज़ एक कथा चाहिए तो Subscribe कर लीजिए।",
       "और गहरी कथाएँ आ रही हैं — Subscribe कीजिए।",
       "कान्हा की और कथाओं के लिए Subscribe कीजिए।",
-      "राधे राधे। Subscribe करके साथ बने रहिए।"
+      "राधे राधे। Subscribe करके साथ बने रहिए।",
+      "अगर दिल को अच्छा लगा तो Share कीजिए।"
     ],
     "desc_openers": [
       "एक कथा जो शांति देती है:",
       "सुनिए ये पुरानी कथा:",
       "आज का प्रसंग कुछ खास है:",
-      "कान्हा का एक और रूप:"
+      "कान्हा का एक और रूप:",
+      "कान्हा की एक और लीला:"
     ],
     "desc_questions": [
       "इस कथा का कौन सा हिस्सा दिल को छू गया?",
       "आप इस बारे में क्या सोचते हैं? नीचे बताइए।",
       "इस सीख में से कौन सी बात आपको सबसे अच्छी लगी?",
-      "अगली कथा किस लीला पर चाहिए? कमेंट कीजिए।"
+      "अगली कथा किस लीला पर चाहिए? कमेंट कीजिए।",
+      "क्या ये बात आज भी लागू होती है? बताइए।"
     ],
     "flashes": [
       "माखन चोरी",
@@ -131,7 +141,10 @@
       "बस मुस्कान",
       "प्रेम बाँटो",
       "काम करो",
-      "जाल बुना"
+      "जाल बुना",
+      "बढ़ता जाएगा",
+      "हर युग में",
+      "खाली बांसुरी"
     ],
     "hooks": [
       "जो आपने सुना है, उसका असली मतलब ये है।",
@@ -219,21 +232,11 @@
       "यदुवंश बाहर से नहीं, अंदर से टूटा।",
       "सोलह हज़ार कन्याओं को सम्मान मिला।",
       "कान्हा ने ज़िंदगी का सबसे सीधा जवाब दिया।",
-      "इस बात को ध्यान से सुनिए।"
+      "इस बात को ध्यान से सुनिए।",
+      "अगर आप टूट चुके हैं तो ये ज़रूर सुनिए।"
     ],
     "image_styles": [
-      "candle and diya glow, shallow depth of field, very close framing",
-      "clear midday sun, crisp shadows, vivid saturated colour, low angle",
-      "dramatic storm light, dark clouds with bright breaks, epic wide angle",
-      "overcast monsoon daylight, wet surfaces, muted greens, medium shot",
-      "warm lamp lit interior at night, deep shadows, intimate close framing",
-      "strong backlight silhouette rim, dust motes in the air, wide composition",
-      "soft diffused shade under trees, dappled light, natural colour, medium close up",
-      "moonlit night, cool silver highlights, deep blue shadows, wide shot",
-      "cool blue pre dawn light, soft mist, eye level camera",
-      "torch and firelight, orange glow on faces, tight close up",
-      "golden hour side lighting, warm haze, low camera angle",
-      "early morning sunrise glow, long soft shadows, calm palette, medium wide"
+      "torch and firelight, orange glow on faces, tight close up"
     ],
     "lesson_hooks": [
       "ये बात आज ही आज़माकर देखिए।",
@@ -842,7 +845,8 @@
       "आपके जीवन में ये सीख कब काम आई? बताइए 👇",
       "आपके परिवार में ये कथा कौन सुनाता था? 👇",
       "कमेंट में एक शब्द लिखिए — कृष्ण 🦚",
-      "कमेंट में अपना नाम और जय श्री कृष्ण लिखिए 🙏"
+      "कमेंट में अपना नाम और जय श्री कृष्ण लिखिए 🙏",
+      "आज का दिन कैसा जा रहा है? बताइए 👇"
     ],
     "screen_hooks": [
       "मोर का पंख",
@@ -850,7 +854,8 @@
       "इसका मतलब ये है",
       "यही सच है",
       "कोई नहीं आया",
-      "कान्हा ने कहा"
+      "कान्हा ने कहा",
+      "बांसुरी का राज़"
     ],
     "seekh_lines": [
       "हर बेवकूफ़ से खुद उलझने से अपनी ताकत गँवाती है, सही रणनीति से समस्या खुद ही हल होती है।",
@@ -1026,7 +1031,8 @@
       "एकलव्य का अंगूठा",
       "ऊखल से बँध गए",
       "व्याध का बाण",
-      "द्रोण का मोह"
+      "द्रोण का मोह",
+      "मोर ने पंख दिया"
     ],
     "thumb_hooks_used": [
       "सच्चे प्रेम का रहस्य",
@@ -1183,7 +1189,8 @@
       "ऊखल से बँध गए",
       "भगवान कहाँ मिलेंगे",
       "व्याध का बाण",
-      "द्रोण का मोह"
+      "द्रोण का मोह",
+      "मोर ने पंख दिया"
     ],
     "title_anchors_bal_leela": [
       "कृष्ण जन्म कथा",
@@ -1200,16 +1207,7 @@
       "कृष्ण मथुरा कथा"
     ],
     "title_anchors_gita": [
-      "गीता का उपदेश हिंदी",
-      "गीता सीख",
-      "भगवद गीता हिंदी",
-      "गीता उपदेश",
-      "गीता का सार",
-      "श्रीकृष्ण उपदेश",
-      "कृष्ण अर्जुन संवाद",
-      "श्रीमद्भगवद्गीता",
-      "गीता अध्याय सार",
-      "गीता ज्ञान"
+      "गीता का उपदेश हिंदी"
     ],
     "title_anchors_mahabharat": [
       "महाभारत का प्रसंग",
@@ -1315,7 +1313,8 @@
       "{core} — एक आदत, बड़ा फर्क | {anchor}",
       "सुनिए: {core} | {anchor}",
       "{core}! | {anchor}",
-      "{anchor} — {core} की कहानी"
+      "{anchor} — {core} की कहानी",
+      "{core} — इसका असर आज दिखेगा | {anchor}"
     ],
     "title_patterns_mahabharat": [
       "{core} — {anchor}",
@@ -1635,10 +1634,13 @@
       [
         "कान्हा का नाम आज भी हर घर में लिया जाना",
         "जो प्रेम बाँटता है, वो कभी खत्म नहीं होता"
+      ],
+      [
+        "भीम की गदा और कान्हा का इशारा",
+        "ताक़त को दिशा मिल जाए तो वो न्याय बन जाती है"
       ]
     ],
     "voices": [
-      "hi-IN-SwaraNeural",
       "hi-IN-MadhurNeural"
     ]
   }
